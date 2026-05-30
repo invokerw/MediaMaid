@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>插件</h1>
+<p class="hint">绿色为配置中已启用。新增插件只需在 <code>mediamaid/plugins/&lt;类别&gt;/</code> 放一个文件并 <code>@register</code>。</p>
+{% for cat in categories %}
+<h2>{{ cat.category }}</h2>
+<div class="pills">
+  {% for it in cat.entries %}
+  <span class="pill {% if it.enabled %}on{% endif %}">{{ it.name }}</span>
+  {% else %}
+  <span class="empty">（无）</span>
+  {% endfor %}
+</div>
+{% endfor %}
+{% endblock %}

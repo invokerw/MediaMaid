@@ -70,6 +70,27 @@ def run(
 
 
 @app.command()
+def web(
+    config: Path = typer.Option(DEFAULT_CONFIG, "--config", "-c"),
+    host: str = typer.Option("127.0.0.1", "--host"),
+    port: int = typer.Option(8500, "--port"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+):
+    """启动 Web 管理界面（需 pip install 'mediamaid[web]'）。"""
+    setup_logging(verbose)
+    try:
+        import uvicorn
+
+        from .web import create_app
+    except ImportError:
+        console.print("[red]缺少 Web 依赖，请先安装：pip install 'mediamaid[web]'[/]")
+        raise typer.Exit(1)
+    application = create_app(config)
+    console.print(f"[green]MediaMaid Web 启动:[/] http://{host}:{port}")
+    uvicorn.run(application, host=host, port=port)
+
+
+@app.command()
 def status(
     config: Path = typer.Option(DEFAULT_CONFIG, "--config", "-c"),
     limit: int = typer.Option(30, "--limit", "-l"),

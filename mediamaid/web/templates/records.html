@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>处理记录</h1>
+<section class="filters">
+  <a href="/records" class="{% if not status %}on{% endif %}">全部</a>
+  <a href="/records?status=done" class="{% if status=='done' %}on{% endif %}">已整理</a>
+  <a href="/records?status=skipped" class="{% if status=='skipped' %}on{% endif %}">跳过</a>
+  <a href="/records?status=failed" class="{% if status=='failed' %}on{% endif %}">失败</a>
+</section>
+{% include "_records_table.html" %}
+{% endblock %}

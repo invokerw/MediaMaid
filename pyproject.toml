@@ -24,6 +24,8 @@ dependencies = [
 dev = ["pytest>=8"]
 # 示例插件的可选依赖（RSS 订阅 / qBittorrent 下载）
 plugins = ["feedparser>=6", "qbittorrent-api>=2024"]
+# Web UI 可选依赖
+web = ["fastapi>=0.110", "uvicorn>=0.29", "jinja2>=3", "python-multipart>=0.0.9"]
 
 [project.scripts]
 mediamaid = "mediamaid.cli:app"
@@ -34,6 +36,9 @@ mediamaid = "mediamaid.cli:app"
 
 [tool.setuptools.packages.find]
 include = ["mediamaid*"]
+
+[tool.setuptools.package-data]
+"mediamaid.web" = ["templates/*.html", "static/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

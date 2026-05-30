@@ -53,6 +53,8 @@ class StateStore:
         self.conn.row_factory = sqlite3.Row
         self._lock = threading.Lock()
         with self._lock:
+            # WAL：读不阻塞写，便于 Web 与守护进程并发访问同一库
+            self.conn.execute("PRAGMA journal_mode=WAL")
             self.conn.executescript(_SCHEMA)
             self.conn.commit()
 
@@ -125,6 +127,14 @@ class StateStore:
             Record(r["id"], r["src_path"], r["dst_path"], r["action"], r["status"], r["ts"])
             for r in rows
         ]
+
+    def counts(self) -> dict:
+        """按状态聚合处理记录数量。"""
+        with self._lock:
+            cur = self.conn.execute(
+                "SELECT status, COUNT(*) AS n FROM processed GROUP BY status"
+            )
+            return {r["status"]: r["n"] for r in cur.fetchall()}
 
     def last_batch_done(self) -> List[Record]:
         """返回最近一批（同一最大时间戳秒附近）成功的记录，供 undo。
