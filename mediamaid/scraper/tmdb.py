@@ -63,7 +63,9 @@ class TMDBScraper(Scraper):
         if not results:
             return None
 
-        best, conf = self._best(results, item, title_key="title", date_key="release_date")
+        best, conf = self._best(
+            results, item, title_key="title", orig_key="original_title", date_key="release_date"
+        )
         if best is None or conf < self.min_confidence:
             log.info("电影匹配置信度不足(%.2f): %s", conf, item.title)
             return None
@@ -93,7 +95,9 @@ class TMDBScraper(Scraper):
         if not results:
             return None
 
-        best, conf = self._best(results, item, title_key="name", date_key="first_air_date")
+        best, conf = self._best(
+            results, item, title_key="name", orig_key="original_name", date_key="first_air_date"
+        )
         if best is None or conf < self.min_confidence:
             log.info("剧集匹配置信度不足(%.2f): %s", conf, item.title)
             return None
@@ -118,11 +122,17 @@ class TMDBScraper(Scraper):
                 info.episode_title = ep.get("name")
         return info
 
-    def _best(self, results, item: MediaItem, title_key: str, date_key: str):
+    def _best(self, results, item: MediaItem, title_key: str, orig_key: str, date_key: str):
+        """挑最佳匹配。同时比对本地化标题与原始标题(取较高分)，
+
+        因为 language=zh-CN 时 title 是中文译名，英文解析名应与 original_title 匹配。
+        """
         best, best_conf = None, -1.0
         for r in results:
-            conf = score_match(
-                item.title, item.year, r.get(title_key, ""), _year_of(r.get(date_key))
+            year = _year_of(r.get(date_key))
+            conf = max(
+                score_match(item.title, item.year, r.get(title_key, ""), year),
+                score_match(item.title, item.year, r.get(orig_key, ""), year),
             )
             if conf > best_conf:
                 best, best_conf = r, conf
