@@ -98,8 +98,11 @@ class Watcher:
             except Exception as e:  # noqa: BLE001
                 log.error("兜底扫描失败: %s", e)
 
-    def start(self) -> None:
-        # 启动时先全量扫一遍
+    def start_background(self) -> None:
+        """启动监控但不阻塞：初始全量扫描 + 挂观察者 + 起后台线程。
+
+        供 Daemon 编排复用；独立 watch 命令用 start()。
+        """
         log.info("启动时全量扫描…")
         self.pipeline.scan()
 
@@ -115,8 +118,11 @@ class Watcher:
 
         threading.Thread(target=self._stability_loop, daemon=True).start()
         threading.Thread(target=self._rescan_loop, daemon=True).start()
-        log.info("MediaMaid 守护进程运行中（Ctrl-C 退出）")
 
+    def start(self) -> None:
+        """独立运行监控守护（阻塞至 Ctrl-C）。"""
+        self.start_background()
+        log.info("MediaMaid 守护进程运行中（Ctrl-C 退出）")
         try:
             while not self._stop.is_set():
                 time.sleep(1)

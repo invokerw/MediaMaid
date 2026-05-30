@@ -10,6 +10,7 @@ from rich.console import Console
 from rich.table import Table
 
 from .config import load_config
+from .daemon import Daemon
 from .logging_conf import setup_logging, get_logger
 from .pipeline import Pipeline
 from .plugins import CATEGORIES, available, load_plugins
@@ -55,6 +56,17 @@ def watch(
     with StateStore(cfg.state_db) as store:
         pipeline = Pipeline(cfg, store)
         Watcher(cfg, pipeline).start()
+
+
+@app.command()
+def run(
+    config: Path = typer.Option(DEFAULT_CONFIG, "--config", "-c"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+):
+    """全自动闭环守护：订阅→下载→监控→识别/刮削/整理→通知，一条龙常驻。"""
+    cfg = _load(config, verbose)
+    with StateStore(cfg.state_db) as store:
+        Daemon(cfg, store).run()
 
 
 @app.command()

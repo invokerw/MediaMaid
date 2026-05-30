@@ -57,6 +57,12 @@ class Config(BaseModel):
     stable_seconds: int = 30
     # 守护进程：兜底全量重扫间隔（秒），0 表示关闭
     rescan_interval: int = 600
+    # 闭环守护(run)：订阅轮询间隔（秒）
+    subscribe_interval: int = 600
+    # 闭环守护(run)：是否轮询下载器的已完成任务并主动整理
+    poll_completed: bool = False
+    # 闭环守护(run)：下载完成轮询间隔（秒）
+    poll_interval: int = 300
     # 状态库路径
     state_db: Path = Path("mediamaid.db")
 

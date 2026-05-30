@@ -16,6 +16,7 @@
 - **状态**：SQLite 去重、记录映射、支持 `undo` 回滚
 - **可选**：生成 `.nfo` + 下载封面/fanart
 - **插件化**：刮削器 / 订阅器 / 下载器 / 通知器 全部可插拔，丢一个文件即生效
+- **全自动闭环**：`run` 一个守护进程把 订阅→下载→完成→整理→通知 串成一条龙
 
 ## 安装
 
@@ -31,7 +32,8 @@ cp config.example.yaml config.yaml   # 编辑源目录、媒体库、TMDB key
 
 mediamaid scan --dry-run             # 预览整理计划，不落地
 mediamaid scan                       # 执行一次整理
-mediamaid watch                      # 常驻监控
+mediamaid watch                      # 常驻监控源目录并整理
+mediamaid run                        # 全自动闭环守护(订阅→下载→整理→通知 一条龙)
 mediamaid status                     # 查看最近处理记录
 mediamaid undo                       # 回滚最近一批
 mediamaid identify <文件路径>         # 调试单个文件的识别结果
@@ -55,6 +57,22 @@ mediamaid subscribe [--loop]         # 订阅器发现新资源 → 下载器
 | `notifier` 通知器 | `notify(event)` | `log`, `webhook` |
 
 > RSS / qBittorrent 需 `pip install 'mediamaid[plugins]'`。
+
+### 全自动闭环（`mediamaid run`）
+
+一个常驻进程同时跑两件事，串成闭环：
+
+```
+订阅器 fetch ─► 去重 ─► 下载器 add ─► (下载到源目录)
+                                          │
+源目录监控 ◄──────────────────────────────┘
+   │ 文件稳定后
+   └─► 识别 ─► 刮削 ─► 整理入库 ─► 通知器
+```
+
+衔接靠下载器把文件存进被监控的 `source_dirs`（qBittorrent 配 `save_path`）。
+若下载客户端保存路径不在监控目录，可开 `poll_completed: true`，守护进程会轮询
+下载器的「已完成」任务并主动整理（重复处理由状态库去重兜底）。
 
 ### 写一个插件
 
@@ -109,9 +127,10 @@ sudo systemctl enable --now mediamaid
 ## 架构
 
 ```
-       订阅器 ─► 下载器        监控 ─► 识别 ─► 刮削 ─► 整理 ─► 通知器
-   subscriber/ downloader/   watcher  identify  scraper/  organizer  notifier/
-   └── subscribe.py ──┘        └──────── pipeline.py 串联 ────────┘
+                    Daemon(daemon.py) 闭环编排
+   订阅器 ─► 下载器        监控 ─► 识别 ─► 刮削 ─► 整理 ─► 通知器
+   subscriber/ downloader/  watcher  identify  scraper/  organizer  notifier/
+   └── subscribe.py ──┘       └──────── pipeline.py 串联 ────────┘
                 插件框架 plugins/{base,registry}.py
         StateStore(store.py) / Config(config.py) / Naming / Transfer
 ```

@@ -121,6 +121,20 @@ class Pipeline:
             return None
         return self.process_item(item, dry_run=dry_run)
 
+    def process_target(self, path: Path, dry_run: bool = False) -> List[Result]:
+        """处理一个文件或目录目标（供下载完成轮询用）。
+
+        目录（多文件种子）→ 扫描其中候选文件逐个处理；文件 → 单个处理。
+        """
+        path = Path(path)
+        if path.is_dir():
+            return [
+                self.process_item(it, dry_run=dry_run)
+                for it in self.identifier.scan_dir(path)
+            ]
+        result = self.process_path(path, dry_run=dry_run)
+        return [result] if result is not None else []
+
     def scan(self, dry_run: bool = False) -> List[Result]:
         """全量扫描所有源目录并处理。"""
         items = self.identifier.scan_dirs(self.config.source_dirs)

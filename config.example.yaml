@@ -19,6 +19,11 @@ stable_seconds: 30
 # 守护进程：兜底全量重扫间隔（秒），0 关闭
 rescan_interval: 600
 
+# 闭环守护 (mediamaid run) 相关：
+subscribe_interval: 600   # 订阅轮询间隔（秒）
+poll_completed: false     # 是否轮询下载器已完成任务并主动整理
+poll_interval: 300        # 下载完成轮询间隔（秒）
+
 # 状态库路径（SQLite）
 state_db: mediamaid.db
 
@@ -59,4 +64,5 @@ plugins:
   #     config: {url: "https://example.com/rss", filter_keyword: 1080p}
   # downloader:
   #   - name: qbittorrent
-  #     config: {host: localhost, port: 8080, username: admin, password: adminadmin, category: mediamaid}
+  #     # save_path 建议指向上面的 source_dirs，下载完成即被监控整理（闭环衔接）
+  #     config: {host: localhost, port: 8080, username: admin, password: adminadmin, category: mediamaid, save_path: /data/downloads}
