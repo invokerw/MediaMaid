@@ -8,3 +8,8 @@ dist/
 config.yaml
 *.db
 .pytest_cache/
+
+# 前端：源码与构建产物(web/static)提交；仅忽略依赖与缓存
+mediamaid/web/frontend/node_modules/
+mediamaid/web/frontend/.vite/
+*.tsbuildinfo

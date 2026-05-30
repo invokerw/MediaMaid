@@ -14,7 +14,7 @@ header {
 .brand { font-weight: 700; font-size: 18px; }
 nav a {
   color: #93a1b3; text-decoration: none; margin-right: 18px; font-size: 15px;
-  padding-bottom: 4px;
+  padding-bottom: 4px; cursor: pointer;
 }
 nav a:hover { color: #d7dde5; }
 nav a.on { color: #4ea1ff; border-bottom: 2px solid #4ea1ff; }
@@ -23,6 +23,7 @@ h1 { font-size: 22px; }
 h2 { font-size: 17px; margin-top: 28px; color: #aeb9c7; }
 .hint { color: #6b7686; font-size: 13px; }
 .mono { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; }
+code { background: #1e2632; padding: 1px 6px; border-radius: 4px; font-size: 13px; }
 
 .cards { display: flex; gap: 16px; margin: 18px 0; }
 .card {
@@ -32,20 +33,21 @@ h2 { font-size: 17px; margin-top: 28px; color: #aeb9c7; }
 .card .num { font-size: 30px; font-weight: 700; color: #4ea1ff; }
 .card .lbl { color: #93a1b3; font-size: 13px; margin-top: 4px; }
 
-.actions { display: flex; align-items: center; gap: 12px; margin: 18px 0; }
+.actions { display: flex; align-items: center; gap: 12px; margin: 18px 0; flex-wrap: wrap; }
 button {
   background: #232c3a; color: #d7dde5; border: 1px solid #2f3a4c;
   padding: 9px 16px; border-radius: 8px; cursor: pointer; font-size: 14px;
 }
-button:hover { background: #2b3647; }
+button:hover:not(:disabled) { background: #2b3647; }
+button:disabled { opacity: 0.5; cursor: default; }
 button.primary { background: #2563c9; border-color: #2563c9; color: #fff; }
-button.primary:hover { background: #2f74e0; }
+button.primary:hover:not(:disabled) { background: #2f74e0; }
 
 .result {
   background: #0d1117; border: 1px solid #232c3a; border-radius: 8px;
   padding: 14px; overflow: auto; max-height: 420px; font-size: 13px; white-space: pre-wrap;
 }
-.hidden { display: none; }
+.result.error { border-color: #4a1f24; color: #f0909a; }
 
 table.grid { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 14px; }
 table.grid th, table.grid td {
@@ -59,13 +61,12 @@ table.grid th { color: #6b7686; font-weight: 600; }
 .badge.skipped { background: #3a3320; color: #e2cf7e; }
 .badge.failed { background: #4a1f24; color: #f0909a; }
 
-.filters a, .pills .pill { margin-right: 10px; }
-.filters a { color: #93a1b3; text-decoration: none; font-size: 14px; }
+.filters a { color: #93a1b3; text-decoration: none; font-size: 14px; margin-right: 14px; cursor: pointer; }
 .filters a.on { color: #4ea1ff; font-weight: 600; }
 
 .pills { margin: 8px 0 4px; }
 .pill {
   display: inline-block; background: #232c3a; color: #93a1b3;
-  padding: 4px 12px; border-radius: 14px; font-size: 13px; margin-bottom: 8px;
+  padding: 4px 12px; border-radius: 14px; font-size: 13px; margin: 0 10px 8px 0;
 }
 .pill.on { background: #14532d; color: #7ee2a8; }

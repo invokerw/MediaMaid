@@ -44,18 +44,30 @@ mediamaid web                        # 启动 Web 管理界面(默认 127.0.0.1:
 
 ## Web 界面
 
+**React SPA（Vite + TypeScript）** 前端 + FastAPI 提供 JSON API。仓库已含预构建产物，
+运行无需 Node：
+
 ```bash
-pip install -e '.[web]'              # 安装 Web 依赖(FastAPI/uvicorn)
+pip install -e '.[web]'              # 安装后端 Web 依赖(FastAPI/uvicorn)
 mediamaid web -c config.yaml         # 浏览器打开 http://127.0.0.1:8500
 ```
 
-轻量服务端渲染（FastAPI + Jinja2，无前端构建）。提供：
+提供：
 - **仪表盘**：已整理/跳过/失败计数、最近记录，一键触发扫描（含 dry-run 预览）与订阅
 - **记录**：处理历史，可按状态过滤
 - **插件**：各类别已发现插件、哪些已启用
 - **配置**：当前配置只读查看
 
 可与 `mediamaid run` 守护进程同时运行（共享 SQLite，已开 WAL）。
+
+### 前端开发
+
+```bash
+cd mediamaid/web/frontend
+npm install
+npm run dev          # 开发服务器，/api 代理到 127.0.0.1:8500（另开 mediamaid web）
+npm run build        # 构建到 ../static/（提交进仓库供分发）
+```
 
 ## 配置
 

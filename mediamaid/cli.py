@@ -85,6 +85,13 @@ def web(
     except ImportError:
         console.print("[red]缺少 Web 依赖，请先安装：pip install 'mediamaid[web]'[/]")
         raise typer.Exit(1)
+    from .web.app import _INDEX
+
+    if not _INDEX.is_file():
+        console.print(
+            "[yellow]前端尚未构建，页面不可用。请执行：[/]\n"
+            "  cd mediamaid/web/frontend && npm install && npm run build"
+        )
     application = create_app(config)
     console.print(f"[green]MediaMaid Web 启动:[/] http://{host}:{port}")
     uvicorn.run(application, host=host, port=port)
