@@ -34,11 +34,29 @@ naming:
   episode: "TV/{show} ({year})/Season {season:02d}/{show} - S{season:02d}E{episode:02d}.{ext}"
   episode_no_year: "TV/{show}/Season {season:02d}/{show} - S{season:02d}E{episode:02d}.{ext}"
 
-scraper:
-  enabled: true
-  # 在 https://www.themoviedb.org/settings/api 申请；留空则仅按文件名整理
-  tmdb_api_key: ""
-  language: zh-CN
-  min_confidence: 0.5
-  write_nfo: false
-  download_artwork: false
+# 后处理（非某个插件专属）
+write_nfo: false
+download_artwork: false
+
+# 插件配置：类别 -> 该类别启用的插件实例列表。
+# 用 `mediamaid plugins` 查看全部可用插件。
+plugins:
+  scraper:
+    - name: tmdb
+      enabled: true
+      config:
+        # 在 https://www.themoviedb.org/settings/api 申请
+        api_key: ""
+        language: zh-CN
+        min_confidence: 0.5
+  notifier:
+    - name: log          # 写日志，零依赖
+    # - name: webhook
+    #   config: {url: "https://example.com/hook"}
+  # 以下需要 pip install 'mediamaid[plugins]'
+  # subscriber:
+  #   - name: rss
+  #     config: {url: "https://example.com/rss", filter_keyword: 1080p}
+  # downloader:
+  #   - name: qbittorrent
+  #     config: {host: localhost, port: 8080, username: admin, password: adminadmin, category: mediamaid}

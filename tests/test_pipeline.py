@@ -15,7 +15,7 @@ def _make_config(tmp_path: Path, action=TransferAction.HARDLINK) -> Config:
         library_dir=lib,
         action=action,
         state_db=tmp_path / "s.db",
-        scraper={"enabled": False},
+        plugins={},  # 不启用任何刮削器 -> null 兜底
     )
 
 

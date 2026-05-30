@@ -15,6 +15,7 @@
 - **命名**：默认 Jellyfin 规范，模板可配
 - **状态**：SQLite 去重、记录映射、支持 `undo` 回滚
 - **可选**：生成 `.nfo` + 下载封面/fanart
+- **插件化**：刮削器 / 订阅器 / 下载器 / 通知器 全部可插拔，丢一个文件即生效
 
 ## 安装
 
@@ -34,11 +35,52 @@ mediamaid watch                      # 常驻监控
 mediamaid status                     # 查看最近处理记录
 mediamaid undo                       # 回滚最近一批
 mediamaid identify <文件路径>         # 调试单个文件的识别结果
+mediamaid plugins                    # 列出所有已发现的插件
+mediamaid subscribe [--loop]         # 订阅器发现新资源 → 下载器
 ```
 
 ## 配置
 
 见 `config.example.yaml`，含逐项注释。
+
+## 插件系统
+
+四类模块均可插拔，由 `config.yaml` 的 `plugins:` 段按名启用：
+
+| 类别 | 接口方法 | 内置示例 |
+|---|---|---|
+| `scraper` 刮削器 | `scrape(item) -> MediaInfo` | `tmdb`, `null` |
+| `subscriber` 订阅器 | `fetch() -> [Release]` | `rss` |
+| `downloader` 下载器 | `add(release) -> bool` | `qbittorrent` |
+| `notifier` 通知器 | `notify(event)` | `log`, `webhook` |
+
+> RSS / qBittorrent 需 `pip install 'mediamaid[plugins]'`。
+
+### 写一个插件
+
+在 `mediamaid/plugins/<类别>/` 下新建一个 `.py`，继承对应基类并 `@register`：
+
+```python
+# mediamaid/plugins/notifier/bark.py
+import httpx
+from pydantic import BaseModel
+from ...models import Event
+from ..base import Notifier
+from ..registry import register
+
+class BarkConfig(BaseModel):
+    url: str
+
+@register
+class BarkNotifier(Notifier):
+    name = "bark"
+    ConfigModel = BarkConfig
+    def notify(self, event: Event) -> None:
+        httpx.get(f"{self.config.url}/{event.message}")
+```
+
+保存即被 `mediamaid plugins` 发现，配置里写 `notifier: [{name: bark, config: {url: ...}}]` 即启用。
+重依赖请在方法内**惰性 import**。外部 pip 包也可经 `entry_points` 组 `mediamaid.plugins` 提供。
 
 ## 部署
 
@@ -67,8 +109,11 @@ sudo systemctl enable --now mediamaid
 ## 架构
 
 ```
-SourceWatcher ─► Identifier ─► Scraper ─► Organizer
-   watcher.py    identify.py   scraper/   organizer.py + transfer.py + naming.py
-        \____________ StateStore(store.py) / Config(config.py) ____________/
-                          Pipeline(pipeline.py) 串联
+       订阅器 ─► 下载器        监控 ─► 识别 ─► 刮削 ─► 整理 ─► 通知器
+   subscriber/ downloader/   watcher  identify  scraper/  organizer  notifier/
+   └── subscribe.py ──┘        └──────── pipeline.py 串联 ────────┘
+                插件框架 plugins/{base,registry}.py
+        StateStore(store.py) / Config(config.py) / Naming / Transfer
 ```
+
+插件按目录自动发现：`mediamaid/plugins/<类别>/*.py` 中 `@register` 的类即被注册。

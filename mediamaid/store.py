@@ -26,6 +26,12 @@ CREATE TABLE IF NOT EXISTS processed (
 );
 CREATE INDEX IF NOT EXISTS idx_processed_src ON processed(src_path);
 CREATE INDEX IF NOT EXISTS idx_processed_inode ON processed(src_inode);
+
+CREATE TABLE IF NOT EXISTS seen_releases (
+    guid   TEXT PRIMARY KEY,
+    title  TEXT,
+    ts     REAL NOT NULL
+);
 """
 
 
@@ -145,4 +151,20 @@ class StateStore:
     def delete(self, record_id: int) -> None:
         with self._lock:
             self.conn.execute("DELETE FROM processed WHERE id=?", (record_id,))
+            self.conn.commit()
+
+    # ---- 订阅去重 ----
+    def release_seen(self, guid: str) -> bool:
+        with self._lock:
+            cur = self.conn.execute(
+                "SELECT 1 FROM seen_releases WHERE guid=? LIMIT 1", (guid,)
+            )
+            return cur.fetchone() is not None
+
+    def mark_release(self, guid: str, title: str = "") -> None:
+        with self._lock:
+            self.conn.execute(
+                "INSERT OR IGNORE INTO seen_releases (guid, title, ts) VALUES (?,?,?)",
+                (guid, title, time.time()),
+            )
             self.conn.commit()

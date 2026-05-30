@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List
 
 import yaml
 from pydantic import BaseModel, Field
@@ -36,15 +36,12 @@ class NamingConfig(BaseModel):
     )
 
 
-class ScraperConfig(BaseModel):
+class PluginSpec(BaseModel):
+    """一个被启用的插件实例：名字 + 该插件自己的配置块。"""
+
+    name: str
     enabled: bool = True
-    tmdb_api_key: Optional[str] = None
-    language: str = "zh-CN"
-    # 标题相似度+年份匹配综合得分低于该值视为不可靠，不据此命名
-    min_confidence: float = 0.5
-    # 是否写 .nfo 与下载封面
-    write_nfo: bool = False
-    download_artwork: bool = False
+    config: Dict = Field(default_factory=dict)
 
 
 class Config(BaseModel):
@@ -63,9 +60,20 @@ class Config(BaseModel):
     # 状态库路径
     state_db: Path = Path("mediamaid.db")
 
+    # 后处理选项（非某个插件专属）
+    write_nfo: bool = False
+    download_artwork: bool = False
+
     filters: FilterConfig = Field(default_factory=FilterConfig)
     naming: NamingConfig = Field(default_factory=NamingConfig)
-    scraper: ScraperConfig = Field(default_factory=ScraperConfig)
+
+    # 插件配置：类别 -> 该类别启用的插件实例列表
+    # 类别取值见 plugins.base.CATEGORIES：scraper/subscriber/downloader/notifier
+    plugins: Dict[str, List[PluginSpec]] = Field(default_factory=dict)
+
+    def plugin_specs(self, category: str) -> List[PluginSpec]:
+        """返回某类别下 enabled 的插件实例配置。"""
+        return [s for s in self.plugins.get(category, []) if s.enabled]
 
 
 def load_config(path: Path) -> Config:

@@ -22,9 +22,15 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
+# 示例插件的可选依赖（RSS 订阅 / qBittorrent 下载）
+plugins = ["feedparser>=6", "qbittorrent-api>=2024"]
 
 [project.scripts]
 mediamaid = "mediamaid.cli:app"
+
+# 外部包可通过该 entry_points 组提供插件（模块顶层用 @register 注册）
+# [project.entry-points."mediamaid.plugins"]
+# my-scraper = "my_pkg.scraper"
 
 [tool.setuptools.packages.find]
 include = ["mediamaid*"]

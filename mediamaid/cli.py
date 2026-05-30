@@ -12,9 +12,10 @@ from rich.table import Table
 from .config import load_config
 from .logging_conf import setup_logging, get_logger
 from .pipeline import Pipeline
+from .plugins import CATEGORIES, available, load_plugins
 from .store import StateStore
-from .transfer import transfer as do_transfer
 from .models import TransferAction
+from .subscribe import SubscribeRunner
 from .watcher import Watcher
 
 app = typer.Typer(help="MediaMaid — 监控、识别、刮削并整理媒体到媒体库。", no_args_is_help=True)
@@ -26,6 +27,7 @@ DEFAULT_CONFIG = Path("config.yaml")
 
 def _load(config: Path, verbose: bool):
     setup_logging(verbose)
+    load_plugins()
     return load_config(config)
 
 
@@ -126,6 +128,38 @@ def identify(
     console.print(item)
     plan = pipeline.organizer.plan(item, None)
     console.print(f"目标(仅文件名规则): {plan.dest}")
+
+
+@app.command()
+def subscribe(
+    config: Path = typer.Option(DEFAULT_CONFIG, "--config", "-c"),
+    loop: bool = typer.Option(False, "--loop", help="周期循环运行而非跑一次"),
+    interval: int = typer.Option(600, "--interval", help="--loop 时每轮间隔秒数"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+):
+    """运行订阅器发现新资源并交给下载器。"""
+    cfg = _load(config, verbose)
+    with StateStore(cfg.state_db) as store:
+        pipeline = Pipeline(cfg, store)
+        runner = SubscribeRunner(cfg, store, notify=pipeline.notify)
+        if loop:
+            runner.run_loop(interval)
+        else:
+            runner.run_once()
+
+
+@app.command()
+def plugins(verbose: bool = typer.Option(False, "--verbose", "-v")):
+    """列出已发现的全部插件。"""
+    setup_logging(verbose)
+    load_plugins()
+    table = Table(title="已注册插件")
+    table.add_column("类别")
+    table.add_column("插件名")
+    for category in CATEGORIES:
+        names = available(category)
+        table.add_row(category, ", ".join(names) if names else "[dim](无)[/]")
+    console.print(table)
 
 
 def _print_results(results) -> None:

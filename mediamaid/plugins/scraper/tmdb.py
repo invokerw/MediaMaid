@@ -1,14 +1,17 @@
-"""TMDB 刮削器：电影 + 剧集，带结果缓存。"""
+"""TMDB 刮削器插件：电影 + 剧集，带进程内缓存与置信度匹配。"""
 
 from __future__ import annotations
 
 from typing import Optional
 
 import httpx
+from pydantic import BaseModel
 
-from ..logging_conf import get_logger
-from ..models import MediaInfo, MediaItem, MediaType
-from .base import Scraper, score_match
+from ...logging_conf import get_logger
+from ...models import MediaInfo, MediaItem, MediaType
+from ..base import Scraper
+from ..registry import register
+from . import score_match
 
 log = get_logger(__name__)
 
@@ -16,24 +19,31 @@ _BASE = "https://api.themoviedb.org/3"
 _IMG = "https://image.tmdb.org/t/p/original"
 
 
+class TMDBConfig(BaseModel):
+    api_key: str
+    language: str = "zh-CN"
+    min_confidence: float = 0.5
+    timeout: float = 15.0
+
+
+@register
 class TMDBScraper(Scraper):
-    def __init__(
-        self,
-        api_key: str,
-        language: str = "zh-CN",
-        min_confidence: float = 0.5,
-        timeout: float = 15.0,
-    ):
-        self.api_key = api_key
-        self.language = language
-        self.min_confidence = min_confidence
-        self.client = httpx.Client(timeout=timeout)
+    name = "tmdb"
+    ConfigModel = TMDBConfig
+
+    def __init__(self, config: TMDBConfig):
+        super().__init__(config)
+        self.client = httpx.Client(timeout=config.timeout)
         # 进程内缓存：避免同一剧集多集重复搜索
         self._search_cache: dict = {}
 
+    @property
+    def min_confidence(self) -> float:
+        return self.config.min_confidence
+
     def _get(self, path: str, **params) -> Optional[dict]:
-        params.setdefault("api_key", self.api_key)
-        params.setdefault("language", self.language)
+        params.setdefault("api_key", self.config.api_key)
+        params.setdefault("language", self.config.language)
         try:
             resp = self.client.get(f"{_BASE}{path}", params=params)
             resp.raise_for_status()

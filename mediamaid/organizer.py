@@ -41,10 +41,9 @@ class Organizer:
             return written
 
         # 刮削附加产物
-        sc = self.config.scraper
         if plan.info is not None:
-            if sc.write_nfo:
+            if self.config.write_nfo:
                 nfo.write_nfo(written, plan.info, plan.item.media_type)
-            if sc.download_artwork:
+            if self.config.download_artwork:
                 nfo.download_artwork(written, plan.info, plan.item.media_type)
         return written

@@ -65,3 +65,34 @@ class TransferPlan:
     source: Path
     dest: Path
     action: TransferAction
+
+
+@dataclass
+class Release:
+    """订阅器(Subscriber)发现的一个可下载资源，交给下载器(Downloader)。"""
+
+    title: str
+    # 唯一标识（去重用），通常是 RSS guid / 详情页链接
+    guid: str
+    # 下载用链接：磁力或 .torrent URL（二者至少其一）
+    magnet: Optional[str] = None
+    torrent_url: Optional[str] = None
+    link: Optional[str] = None  # 详情页
+    size: Optional[int] = None  # 字节
+    pub_date: Optional[str] = None
+    source: Optional[str] = None  # 来源插件名/站点
+
+    @property
+    def download_uri(self) -> Optional[str]:
+        return self.magnet or self.torrent_url
+
+
+@dataclass
+class Event:
+    """通知事件，交给通知器(Notifier)。"""
+
+    type: str  # organized / download_added / error / info
+    message: str
+    item: Optional[MediaItem] = None
+    info: Optional[MediaInfo] = None
+    dest: Optional[Path] = None

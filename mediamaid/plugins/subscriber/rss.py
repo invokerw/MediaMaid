@@ -1,0 +1,90 @@
+"""RSS 订阅器：解析 RSS/Atom 源为 Release 列表。
+
+依赖 feedparser（可选，pip install 'mediamaid[plugins]'），惰性 import。
+"""
+
+from __future__ import annotations
+
+from typing import List, Optional
+
+from pydantic import BaseModel
+
+from ...logging_conf import get_logger
+from ...models import Release
+from ..base import Subscriber
+from ..registry import register
+
+log = get_logger(__name__)
+
+
+class RSSConfig(BaseModel):
+    url: str
+    # 可选：仅保留标题包含该关键词的条目（不区分大小写）
+    filter_keyword: Optional[str] = None
+    timeout: float = 30.0
+
+
+@register
+class RSSSubscriber(Subscriber):
+    name = "rss"
+    ConfigModel = RSSConfig
+
+    def fetch(self) -> List[Release]:
+        try:
+            import feedparser  # 惰性 import
+        except ImportError:
+            log.error("RSS 订阅器需要 feedparser：pip install 'mediamaid[plugins]'")
+            return []
+
+        cfg: RSSConfig = self.config
+        feed = feedparser.parse(cfg.url)
+        if getattr(feed, "bozo", False):
+            log.warning("RSS 解析告警 %s: %s", cfg.url, getattr(feed, "bozo_exception", ""))
+
+        releases: List[Release] = []
+        kw = cfg.filter_keyword.lower() if cfg.filter_keyword else None
+        for entry in feed.entries:
+            title = entry.get("title", "")
+            if kw and kw not in title.lower():
+                continue
+            magnet, torrent_url = _extract_links(entry)
+            guid = entry.get("id") or entry.get("link") or title
+            releases.append(
+                Release(
+                    title=title,
+                    guid=guid,
+                    magnet=magnet,
+                    torrent_url=torrent_url,
+                    link=entry.get("link"),
+                    size=_extract_size(entry),
+                    pub_date=entry.get("published"),
+                    source=f"rss:{cfg.url}",
+                )
+            )
+        log.info("RSS 抓取到 %d 条: %s", len(releases), cfg.url)
+        return releases
+
+
+def _extract_links(entry) -> tuple[Optional[str], Optional[str]]:
+    link = entry.get("link", "") or ""
+    if link.startswith("magnet:"):
+        return link, None
+    magnet = None
+    torrent_url = None
+    for enc in entry.get("enclosures", []) or []:
+        href = enc.get("href", "")
+        if href.startswith("magnet:"):
+            magnet = href
+        elif enc.get("type", "").endswith("torrent") or href.endswith(".torrent"):
+            torrent_url = href
+    if not (magnet or torrent_url) and link.endswith(".torrent"):
+        torrent_url = link
+    return magnet, torrent_url
+
+
+def _extract_size(entry) -> Optional[int]:
+    for enc in entry.get("enclosures", []) or []:
+        length = enc.get("length")
+        if length and str(length).isdigit():
+            return int(length)
+    return None

@@ -9,9 +9,9 @@ from typing import List, Optional
 from .config import Config
 from .identify import Identifier
 from .logging_conf import get_logger
-from .models import MediaItem, MediaType
+from .models import Event, MediaInfo, MediaItem, MediaType
 from .organizer import Organizer
-from .scraper import NullScraper, Scraper, TMDBScraper
+from .plugins import Notifier, Scraper, create, load_plugins
 from .store import StateStore
 
 log = get_logger(__name__)
@@ -25,26 +25,59 @@ class Result:
     error: Optional[str] = None
 
 
-def build_scraper(config: Config) -> Scraper:
-    sc = config.scraper
-    if sc.enabled and sc.tmdb_api_key:
-        return TMDBScraper(
-            api_key=sc.tmdb_api_key,
-            language=sc.language,
-            min_confidence=sc.min_confidence,
-        )
-    if sc.enabled and not sc.tmdb_api_key:
-        log.warning("未配置 tmdb_api_key，降级为仅按文件名整理（不刮削）")
-    return NullScraper()
+def build_scrapers(config: Config) -> List[Scraper]:
+    """按配置加载启用的刮削器插件；为空则用 null 兜底。"""
+    load_plugins()
+    scrapers: List[Scraper] = []
+    for spec in config.plugin_specs("scraper"):
+        try:
+            scrapers.append(create("scraper", spec.name, spec.config))
+        except Exception as e:  # noqa: BLE001
+            log.error("加载刮削器 %s 失败: %s", spec.name, e)
+    if not scrapers:
+        log.warning("未配置刮削器，降级为仅按文件名整理（不刮削）")
+        scrapers.append(create("scraper", "null"))
+    return scrapers
+
+
+def build_notifiers(config: Config) -> List[Notifier]:
+    load_plugins()
+    notifiers: List[Notifier] = []
+    for spec in config.plugin_specs("notifier"):
+        try:
+            notifiers.append(create("notifier", spec.name, spec.config))
+        except Exception as e:  # noqa: BLE001
+            log.error("加载通知器 %s 失败: %s", spec.name, e)
+    return notifiers
 
 
 class Pipeline:
     def __init__(self, config: Config, store: Optional[StateStore] = None):
         self.config = config
         self.identifier = Identifier(config.filters)
-        self.scraper = build_scraper(config)
+        self.scrapers = build_scrapers(config)
+        self.notifiers = build_notifiers(config)
         self.organizer = Organizer(config)
         self.store = store
+
+    def _scrape(self, item: MediaItem) -> Optional[MediaInfo]:
+        """链式刮削：依次尝试各刮削器，返回首个命中的结果。"""
+        for scraper in self.scrapers:
+            try:
+                info = scraper.scrape(item)
+            except Exception as e:  # noqa: BLE001
+                log.warning("刮削器 %s 异常 %s: %s", scraper.name, item.source.name, e)
+                continue
+            if info is not None:
+                return info
+        return None
+
+    def notify(self, event: Event) -> None:
+        for n in self.notifiers:
+            try:
+                n.notify(event)
+            except Exception as e:  # noqa: BLE001
+                log.warning("通知器 %s 失败: %s", n.name, e)
 
     def process_item(self, item: MediaItem, dry_run: bool = False) -> Result:
         if item.media_type == MediaType.UNKNOWN:
@@ -56,11 +89,7 @@ class Pipeline:
             return Result(item, "skipped", error="already done")
 
         # 刮削（失败不致命，降级为仅文件名）
-        info = None
-        try:
-            info = self.scraper.scrape(item)
-        except Exception as e:  # noqa: BLE001
-            log.warning("刮削异常，降级处理 %s: %s", item.source.name, e)
+        info = self._scrape(item)
 
         try:
             plan = self.organizer.plan(item, info)
@@ -69,6 +98,8 @@ class Pipeline:
             log.error("落地失败 %s: %s", item.source.name, e)
             if self.store and not dry_run:
                 self.store.record(item.source, None, self.config.action.value, "failed", str(e))
+            if not dry_run:
+                self.notify(Event("error", f"落地失败: {item.source.name}: {e}", item=item))
             return Result(item, "failed", error=str(e))
 
         if dest is None:
@@ -76,6 +107,8 @@ class Pipeline:
 
         if self.store and not dry_run:
             self.store.record(item.source, dest, plan.action.value, "done")
+        if not dry_run:
+            self.notify(Event("organized", f"已整理: {dest.name}", item=item, info=info, dest=dest))
         return Result(item, "done", dest=dest)
 
     def process_path(self, path: Path, dry_run: bool = False) -> Optional[Result]:
