@@ -1,0 +1,44 @@
+# MediaMaid 配置示例。复制为 config.yaml 后按需修改。
+
+# 监控/扫描的源目录（可多个），例如下载完成目录
+source_dirs:
+  - /data/downloads
+
+# 媒体库根目录
+library_dir: /data/media
+
+# 落地方式: hardlink（默认，跨盘自动回退复制） / copy / move
+action: hardlink
+
+# 目标已存在时: skip / overwrite / rename
+on_conflict: skip
+
+# 守护进程：文件大小连续 N 秒不变才认为写入完成
+stable_seconds: 30
+
+# 守护进程：兜底全量重扫间隔（秒），0 关闭
+rescan_interval: 600
+
+# 状态库路径（SQLite）
+state_db: mediamaid.db
+
+filters:
+  video_extensions: [mkv, mp4, avi, ts, m2ts, mov, wmv, flv, iso]
+  min_size_mb: 50
+  exclude_keywords: [sample, trailer, 预告]
+
+naming:
+  # 可用占位符: {title} {show} {year} {season} {episode} {episode_title} {ext}
+  movie: "Movies/{title} ({year})/{title} ({year}).{ext}"
+  movie_no_year: "Movies/{title}/{title}.{ext}"
+  episode: "TV/{show} ({year})/Season {season:02d}/{show} - S{season:02d}E{episode:02d}.{ext}"
+  episode_no_year: "TV/{show}/Season {season:02d}/{show} - S{season:02d}E{episode:02d}.{ext}"
+
+scraper:
+  enabled: true
+  # 在 https://www.themoviedb.org/settings/api 申请；留空则仅按文件名整理
+  tmdb_api_key: ""
+  language: zh-CN
+  min_confidence: 0.5
+  write_nfo: false
+  download_artwork: false

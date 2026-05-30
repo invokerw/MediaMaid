@@ -1,0 +1,16 @@
+[Unit]
+Description=MediaMaid 媒体自动整理守护进程
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# 按实际情况修改用户与路径
+User=weifei
+WorkingDirectory=/home/weifei/code/MediaMaid
+ExecStart=/home/weifei/code/MediaMaid/.venv/bin/mediamaid watch -c /home/weifei/code/MediaMaid/config.yaml
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

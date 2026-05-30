@@ -1,0 +1,16 @@
+services:
+  mediamaid:
+    build: .
+    container_name: mediamaid
+    restart: unless-stopped
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Asia/Shanghai
+    volumes:
+      - ./config:/config
+      # 源目录与媒体库必须挂在同一个 volume/挂载点下，
+      # 否则跨设备无法硬链接（会回退为复制）。
+      - /data:/data
+    # 默认 entrypoint 为 watch；如只想跑一次整理：
+    # command: ["scan", "-c", "/config/config.yaml"]
