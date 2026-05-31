@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Card, Tag, Typography, Space, message } from "antd";
 import { api, PluginCategory } from "../api";
 
-const { Title, Paragraph, Text } = Typography;
+const { Paragraph, Text } = Typography;
 
 const CATEGORY_LABEL: Record<string, string> = {
   scraper: "刮削器",
@@ -23,7 +23,6 @@ export default function Plugins() {
 
   return (
     <>
-      <Title level={3}>插件</Title>
       <Paragraph type="secondary">
         绿色为配置中已启用。新增插件只需在{" "}
         <Text code>mediamaid/plugins/&lt;类别&gt;/</Text> 放一个文件并{" "}

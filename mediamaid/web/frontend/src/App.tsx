@@ -1,5 +1,6 @@
+import { useState } from "react";
 import { Routes, Route, useNavigate, useLocation } from "react-router-dom";
-import { Layout, Menu } from "antd";
+import { Layout, Menu, Typography } from "antd";
 import {
   DashboardOutlined,
   UnorderedListOutlined,
@@ -11,7 +12,7 @@ import Records from "./pages/Records";
 import Plugins from "./pages/Plugins";
 import Config from "./pages/Config";
 
-const { Header, Content } = Layout;
+const { Header, Content, Sider } = Layout;
 
 const items = [
   { key: "/", icon: <DashboardOutlined />, label: "仪表盘" },
@@ -20,31 +21,47 @@ const items = [
   { key: "/config", icon: <SettingOutlined />, label: "配置" },
 ];
 
+const TITLES: Record<string, string> = {
+  "/": "仪表盘",
+  "/records": "处理记录",
+  "/plugins": "插件",
+  "/config": "配置",
+};
+
 export default function App() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  const [collapsed, setCollapsed] = useState(false);
 
   return (
     <Layout style={{ minHeight: "100vh" }}>
-      <Header style={{ display: "flex", alignItems: "center", paddingInline: 24 }}>
-        <div className="brand">🎬 MediaMaid</div>
+      <Sider collapsible collapsed={collapsed} onCollapse={setCollapsed} theme="dark">
+        <div className="logo">{collapsed ? "🎬" : "🎬 MediaMaid"}</div>
         <Menu
-          mode="horizontal"
+          mode="inline"
           theme="dark"
           selectedKeys={[pathname]}
           items={items}
           onClick={({ key }) => navigate(key)}
-          style={{ flex: 1, minWidth: 0, marginLeft: 32 }}
         />
-      </Header>
-      <Content style={{ padding: "28px", maxWidth: 1040, width: "100%", margin: "0 auto" }}>
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/records" element={<Records />} />
-          <Route path="/plugins" element={<Plugins />} />
-          <Route path="/config" element={<Config />} />
-        </Routes>
-      </Content>
+      </Sider>
+      <Layout>
+        <Header style={{ paddingInline: 24, display: "flex", alignItems: "center" }}>
+          <Typography.Title level={4} style={{ margin: 0 }}>
+            {TITLES[pathname] ?? "MediaMaid"}
+          </Typography.Title>
+        </Header>
+        <Content style={{ padding: 24 }}>
+          <div style={{ maxWidth: 1040, margin: "0 auto" }}>
+            <Routes>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/records" element={<Records />} />
+              <Route path="/plugins" element={<Plugins />} />
+              <Route path="/config" element={<Config />} />
+            </Routes>
+          </div>
+        </Content>
+      </Layout>
     </Layout>
   );
 }

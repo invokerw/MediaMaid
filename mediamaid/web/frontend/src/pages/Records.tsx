@@ -1,10 +1,8 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Segmented, Typography, message } from "antd";
+import { Segmented, message } from "antd";
 import { api, RecordRow } from "../api";
 import RecordsTable from "../components/RecordsTable";
-
-const { Title } = Typography;
 
 const OPTIONS = [
   { label: "全部", value: "" },
@@ -30,7 +28,6 @@ export default function Records() {
 
   return (
     <>
-      <Title level={3}>处理记录</Title>
       <Segmented
         options={OPTIONS}
         value={status}
