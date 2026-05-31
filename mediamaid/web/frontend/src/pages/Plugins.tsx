@@ -20,7 +20,8 @@ export default function Plugins() {
   const load = () =>
     api
       .plugins()
-      .then((d) => setCategories(d.categories))
+      // 订阅器改由「订阅」页管理，这里不展示
+      .then((d) => setCategories(d.categories.filter((c) => c.category !== "subscriber")))
       .catch((e) => message.error(String(e)));
 
   useEffect(() => {

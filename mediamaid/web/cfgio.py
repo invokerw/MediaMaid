@@ -61,6 +61,54 @@ def upsert_plugin(
         yaml.dump(data, f)
 
 
+def _load(path: Path):
+    yaml = _yaml()
+    if path.exists():
+        with path.open("r", encoding="utf-8") as f:
+            return yaml, (yaml.load(f) or {})
+    return yaml, {}
+
+
+def add_subscription(path: Path, sub: dict) -> None:
+    """向 subscriptions 列表追加一条订阅。"""
+    path = Path(path)
+    yaml, data = _load(path)
+    subs = data.get("subscriptions")
+    if subs is None:
+        subs = []
+        data["subscriptions"] = subs
+    subs.append(sub)
+    with path.open("w", encoding="utf-8") as f:
+        yaml.dump(data, f)
+
+
+def update_subscription(path: Path, sub_id: str, fields: dict) -> bool:
+    """按 id 更新订阅；返回是否命中。"""
+    path = Path(path)
+    yaml, data = _load(path)
+    for s in data.get("subscriptions", []):
+        if s.get("id") == sub_id:
+            for k, v in fields.items():
+                s[k] = v
+            with path.open("w", encoding="utf-8") as f:
+                yaml.dump(data, f)
+            return True
+    return False
+
+
+def delete_subscription(path: Path, sub_id: str) -> bool:
+    path = Path(path)
+    yaml, data = _load(path)
+    subs = data.get("subscriptions", [])
+    new = [s for s in subs if s.get("id") != sub_id]
+    if len(new) == len(subs):
+        return False
+    data["subscriptions"] = new
+    with path.open("w", encoding="utf-8") as f:
+        yaml.dump(data, f)
+    return True
+
+
 # 嵌套对象类键，做 mapping 级合并而非整体替换
 _NESTED_KEYS = {"filters", "naming"}
 

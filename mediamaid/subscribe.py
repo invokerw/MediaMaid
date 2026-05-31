@@ -1,27 +1,34 @@
-"""订阅→下载 流程：订阅器发现 Release → 去重 → 下载器提交 → 通知。"""
+"""订阅→下载 流程：按订阅条目发现 Release → 去重 → 下载器提交 → 通知。
+
+订阅器(rss 等)是类型；订阅(Subscription)是某类型的命名实例。一个 runner 遍历
+config.subscriptions，对每条 enabled 订阅实例化其订阅器并抓取。
+"""
 
 from __future__ import annotations
 
 import time
-from typing import List
+from typing import List, Optional, Tuple
 
-from .config import Config
+from .config import Config, Subscription
 from .logging_conf import get_logger
-from .models import Event
+from .models import Event, Release
 from .plugins import Downloader, Subscriber, create, load_plugins
 from .store import StateStore
 
 log = get_logger(__name__)
 
 
-def build_subscribers(config: Config) -> List[Subscriber]:
+def build_subscriptions(config: Config) -> List[Tuple[Subscription, Subscriber]]:
+    """为每条启用订阅实例化其订阅器，返回 (订阅, 订阅器实例) 列表。"""
     load_plugins()
-    out: List[Subscriber] = []
-    for spec in config.plugin_specs("subscriber"):
+    out: List[Tuple[Subscription, Subscriber]] = []
+    for sub in config.enabled_subscriptions():
         try:
-            out.append(create("subscriber", spec.name, spec.config))
+            inst = create("subscriber", sub.subscriber, sub.config)
         except Exception as e:  # noqa: BLE001
-            log.error("加载订阅器 %s 失败: %s", spec.name, e)
+            log.error("订阅 %s 加载订阅器 %s 失败: %s", sub.name, sub.subscriber, e)
+            continue
+        out.append((sub, inst))
     return out
 
 
@@ -43,58 +50,61 @@ class SubscribeRunner:
         self.reload(config)
 
     def reload(self, config: Config) -> None:
-        """用新配置重建订阅器/下载器（热重载用）。"""
+        """用新配置重建订阅/下载器（热重载用）。"""
         self.config = config
-        self.subscribers = build_subscribers(config)
+        self.subs = build_subscriptions(config)
         self.downloaders = build_downloaders(config)
 
+    # 兼容旧属性名（部分测试/代码读 subscribers）
+    @property
+    def subscribers(self) -> List[Subscriber]:
+        return [inst for _, inst in self.subs]
+
     def run_once(self) -> int:
-        """跑一轮：返回本轮新提交下载的数量。"""
-        if not self.subscribers:
-            log.warning("未配置订阅器")
+        """跑一轮：所有启用订阅各自抓取→去重→下载。返回新提交下载数。"""
+        if not self.subs:
+            log.warning("未配置订阅")
             return 0
         if not self.downloaders:
             log.warning("未配置下载器，新资源只记录不下载")
 
         submitted = 0
-        for sub in self.subscribers:
+        for sub, inst in self.subs:
             try:
-                releases = sub.fetch()
+                releases = inst.fetch()
             except Exception as e:  # noqa: BLE001
-                log.error("订阅器 %s 抓取失败: %s", sub.name, e)
+                log.error("订阅 %s 抓取失败: %s", sub.name, e)
                 continue
             for rel in releases:
                 if self.store.release_seen(rel.guid):
                     continue
-                self.store.mark_release(rel.guid, rel.title)
+                self.store.mark_release(rel.guid, rel.title, sub.id)
                 if self._dispatch(rel):
                     submitted += 1
         log.info("订阅本轮新提交 %d 个下载", submitted)
         return submitted
 
     def _dispatch(self, rel) -> bool:
-        # 交给首个能成功提交的下载器
         for dl in self.downloaders:
             if dl.add(rel):
                 self._notify(Event("download_added", f"已提交下载: {rel.title}"))
                 return True
         return False
 
-    def preview(self) -> List[Release]:
-        """抓取所有订阅器当前可见资源（不去重、不下载），用于预览。"""
-        out: List[Release] = []
-        for sub in self.subscribers:
-            try:
-                out.extend(sub.fetch())
-            except Exception as e:  # noqa: BLE001
-                log.error("订阅器 %s 抓取失败: %s", sub.name, e)
-        return out
+    def preview(self, subscription: Subscription) -> List[Release]:
+        """抓取某条订阅当前可见资源（不去重、不下载）。"""
+        try:
+            inst = create("subscriber", subscription.subscriber, subscription.config)
+            return inst.fetch()
+        except Exception as e:  # noqa: BLE001
+            log.error("订阅 %s 预览失败: %s", subscription.name, e)
+            return []
 
-    def download_release(self, rel: Release) -> bool:
-        """手动下载单条资源：提交下载器成功则标记已处理。"""
+    def download_release(self, rel: Release, sub_id: Optional[str] = None) -> bool:
+        """手动下载单条资源：提交成功则标记已处理。"""
         ok = self._dispatch(rel)
         if ok:
-            self.store.mark_release(rel.guid, rel.title)
+            self.store.mark_release(rel.guid, rel.title, sub_id)
         return ok
 
     def run_loop(self, interval: int) -> None:

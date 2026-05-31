@@ -36,10 +36,10 @@ def _cfg(tmp_path: Path) -> Config:
         source_dirs=[tmp_path / "dl"],
         library_dir=tmp_path / "lib",
         state_db=tmp_path / "s.db",
-        plugins={
-            "subscriber": [{"name": "fake_sub_test"}],
-            "downloader": [{"name": "fake_dl_test"}],
-        },
+        subscriptions=[
+            {"id": "s1", "name": "测试订阅", "subscriber": "fake_sub_test"},
+        ],
+        plugins={"downloader": [{"name": "fake_dl_test"}]},
     )
 
 
@@ -54,3 +54,5 @@ def test_subscribe_dispatch_and_dedup(tmp_path):
         # 次轮：已 seen，去重，0 提交
         assert runner.run_once() == 0
         assert len(_ADDED) == 2
+        # 按订阅 id 记录了已处理
+        assert store.count_for("s1") == 2

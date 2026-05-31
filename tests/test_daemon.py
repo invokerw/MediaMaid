@@ -119,10 +119,8 @@ def test_closed_loop_end_to_end(tmp_path):
         stable_seconds=1,
         rescan_interval=0,
         subscribe_interval=3600,  # 只跑启动那一轮
-        plugins={
-            "subscriber": [{"name": "loop_sub_test"}],
-            "downloader": [{"name": "loop_dl_test"}],
-        },
+        subscriptions=[{"id": "ls", "name": "loop", "subscriber": "loop_sub_test"}],
+        plugins={"downloader": [{"name": "loop_dl_test"}]},
     )
     _DEST_DIR["path"] = cfg.source_dirs[0]
 

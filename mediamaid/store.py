@@ -30,6 +30,7 @@ CREATE INDEX IF NOT EXISTS idx_processed_inode ON processed(src_inode);
 CREATE TABLE IF NOT EXISTS seen_releases (
     guid   TEXT PRIMARY KEY,
     title  TEXT,
+    sub_id TEXT,
     ts     REAL NOT NULL
 );
 """
@@ -56,7 +57,14 @@ class StateStore:
             # WAL：读不阻塞写，便于 Web 与守护进程并发访问同一库
             self.conn.execute("PRAGMA journal_mode=WAL")
             self.conn.executescript(_SCHEMA)
+            self._migrate()
             self.conn.commit()
+
+    def _migrate(self) -> None:
+        """旧库补列（幂等）。"""
+        cols = {r["name"] for r in self.conn.execute("PRAGMA table_info(seen_releases)")}
+        if "sub_id" not in cols:
+            self.conn.execute("ALTER TABLE seen_releases ADD COLUMN sub_id TEXT")
 
     def close(self) -> None:
         self.conn.close()
@@ -171,11 +179,12 @@ class StateStore:
             )
             return cur.fetchone() is not None
 
-    def mark_release(self, guid: str, title: str = "") -> None:
+    def mark_release(self, guid: str, title: str = "", sub_id: Optional[str] = None) -> None:
         with self._lock:
             self.conn.execute(
-                "INSERT OR IGNORE INTO seen_releases (guid, title, ts) VALUES (?,?,?)",
-                (guid, title, time.time()),
+                "INSERT OR IGNORE INTO seen_releases (guid, title, sub_id, ts) "
+                "VALUES (?,?,?,?)",
+                (guid, title, sub_id, time.time()),
             )
             self.conn.commit()
 
@@ -187,3 +196,20 @@ class StateStore:
                 (limit,),
             )
             return [(r["guid"], r["title"], r["ts"]) for r in cur.fetchall()]
+
+    def releases_for(self, sub_id: str, limit: int = 200) -> List[tuple]:
+        """某订阅已处理的资源 [(guid, title, ts), ...]，最近在前。"""
+        with self._lock:
+            cur = self.conn.execute(
+                "SELECT guid, title, ts FROM seen_releases WHERE sub_id=? "
+                "ORDER BY ts DESC LIMIT ?",
+                (sub_id, limit),
+            )
+            return [(r["guid"], r["title"], r["ts"]) for r in cur.fetchall()]
+
+    def count_for(self, sub_id: str) -> int:
+        with self._lock:
+            cur = self.conn.execute(
+                "SELECT COUNT(*) AS n FROM seen_releases WHERE sub_id=?", (sub_id,)
+            )
+            return cur.fetchone()["n"]

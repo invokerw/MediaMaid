@@ -81,6 +81,20 @@ export interface SeenRelease {
   ts: number;
 }
 
+export interface SubscriberType {
+  name: string;
+  schema: JsonSchema;
+}
+
+export interface SubscriptionRow {
+  id: string;
+  name: string;
+  subscriber: string;
+  enabled: boolean;
+  config: Record<string, unknown>;
+  processed: number;
+}
+
 export interface ScanResult {
   dry_run: boolean;
   summary: Record<string, number>;
@@ -133,15 +147,29 @@ export const api = {
     }),
   settings: () => get<Settings>("/api/settings"),
   updateSettings: (body: Partial<Settings>) => put<Settings>("/api/settings", body),
-  subPreview: () =>
-    get<{ subscribers: string[]; releases: ReleaseRow[] }>("/api/subscriptions/preview"),
-  seenReleases: () => get<{ releases: SeenRelease[] }>("/api/releases"),
+  subscriberTypes: () => get<{ subscribers: SubscriberType[] }>("/api/subscribers"),
+  subscriptions: () => get<{ subscriptions: SubscriptionRow[] }>("/api/subscriptions"),
+  createSubscription: (body: {
+    name: string;
+    subscriber: string;
+    enabled: boolean;
+    config: Record<string, unknown>;
+  }) => post<SubscriptionRow>("/api/subscriptions", body),
+  updateSubscription: (id: string, body: Partial<SubscriptionRow>) =>
+    put<SubscriptionRow>(`/api/subscriptions/${id}`, body),
+  deleteSubscription: (id: string) =>
+    send<{ ok: boolean }>("DELETE", `/api/subscriptions/${id}`),
+  subPreview: (id: string) =>
+    get<{ releases: ReleaseRow[] }>(`/api/subscriptions/${id}/preview`),
+  subReleases: (id: string) =>
+    get<{ releases: SeenRelease[] }>(`/api/subscriptions/${id}/releases`),
   downloadRelease: (rel: {
     title: string;
     guid: string;
     magnet: string | null;
     torrent_url: string | null;
     link: string | null;
+    sub_id?: string;
   }) => post<{ ok: boolean }>("/api/releases/download", rel),
   config: () => get<{ path: string; text: string }>("/api/config"),
   scan: (dry_run: boolean) => post<ScanResult>("/api/scan", { dry_run }),

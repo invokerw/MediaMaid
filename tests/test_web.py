@@ -208,8 +208,7 @@ def test_settings_validation_error(client):
     assert r.status_code == 422
 
 
-def _enable_rss_dummy(c, tmp_path):
-    """配置一个本地 RSS 订阅器 + dummy 下载器。"""
+def _make_feed(tmp_path):
     feed = tmp_path / "feed.xml"
     feed.write_text(
         '<?xml version="1.0"?><rss version="2.0"><channel><title>t</title>'
@@ -218,39 +217,67 @@ def _enable_rss_dummy(c, tmp_path):
         '</channel></rss>',
         encoding="utf-8",
     )
-    c.put(
-        "/api/plugins/subscriber/rss",
-        json={"enabled": True, "config": {"url": f"file://{feed}"}},
+    return feed
+
+
+def test_subscribers_types_have_schema(client):
+    c, _ = client
+    r = c.get("/api/subscribers")
+    assert r.status_code == 200
+    rss = next(s for s in r.json()["subscribers"] if s["name"] == "rss")
+    assert "url" in rss["schema"]["properties"]
+
+
+def test_subscription_crud(client):
+    c, tmp_path = client
+    feed = _make_feed(tmp_path)
+
+    # 校验失败：rss 缺 url → 422
+    assert c.post(
+        "/api/subscriptions", json={"name": "x", "subscriber": "rss", "config": {}}
+    ).status_code == 422
+
+    # 添加
+    r = c.post(
+        "/api/subscriptions",
+        json={"name": "遮天", "subscriber": "rss", "config": {"url": f"file://{feed}"}},
     )
-    c.put(
-        "/api/plugins/downloader/dummy",
-        json={"enabled": True, "config": {"save_path": str(tmp_path / "dl"), "size_mb": 1}},
-    )
+    assert r.status_code == 200
+    sub_id = r.json()["id"]
+
+    # 列表含该条
+    lst = c.get("/api/subscriptions").json()["subscriptions"]
+    assert any(s["id"] == sub_id and s["name"] == "遮天" for s in lst)
+
+    # 删除
+    assert c.delete(f"/api/subscriptions/{sub_id}").status_code == 200
+    assert all(s["id"] != sub_id for s in c.get("/api/subscriptions").json()["subscriptions"])
 
 
 def test_subscription_preview_and_download(client):
     c, tmp_path = client
-    _enable_rss_dummy(c, tmp_path)
+    feed = _make_feed(tmp_path)
+    c.put(
+        "/api/plugins/downloader/dummy",
+        json={"enabled": True, "config": {"save_path": str(tmp_path / "dl"), "size_mb": 1}},
+    )
+    sub_id = c.post(
+        "/api/subscriptions",
+        json={"name": "遮天", "subscriber": "rss", "config": {"url": f"file://{feed}"}},
+    ).json()["id"]
 
-    r = c.get("/api/subscriptions/preview")
-    assert r.status_code == 200
-    body = r.json()
-    assert "rss" in body["subscribers"]
-    rel = next(x for x in body["releases"] if x["title"] == "The.Matrix.1999.1080p")
+    rels = c.get(f"/api/subscriptions/{sub_id}/preview").json()["releases"]
+    rel = next(x for x in rels if x["title"] == "The.Matrix.1999.1080p")
     assert rel["seen"] is False
-    guid = rel["guid"]
 
-    # 手动下载该资源 → dummy 建文件 + 标记已处理
     r = c.post(
         "/api/releases/download",
-        json={"title": rel["title"], "guid": guid, "magnet": rel["magnet"],
-              "torrent_url": None, "link": None},
+        json={"title": rel["title"], "guid": rel["guid"], "magnet": rel["magnet"],
+              "torrent_url": None, "link": None, "sub_id": sub_id},
     )
     assert r.status_code == 200
     assert (tmp_path / "dl" / "The.Matrix.1999.1080p.mkv").exists()
 
-    # 已处理资源历史出现该条；预览里该条 seen=True
-    assert any(x["guid"] == guid for x in c.get("/api/releases").json()["releases"])
-    rel2 = next(x for x in c.get("/api/subscriptions/preview").json()["releases"]
-                if x["guid"] == guid)
-    assert rel2["seen"] is True
+    # 该订阅的已处理历史出现该条
+    done = c.get(f"/api/subscriptions/{sub_id}/releases").json()["releases"]
+    assert any(x["guid"] == rel["guid"] for x in done)

@@ -44,6 +44,16 @@ class PluginSpec(BaseModel):
     config: Dict = Field(default_factory=dict)
 
 
+class Subscription(BaseModel):
+    """一条命名订阅：选定某订阅器类型并提供其参数。"""
+
+    id: str
+    name: str
+    subscriber: str  # 订阅器类型名，如 "rss"
+    enabled: bool = True
+    config: Dict = Field(default_factory=dict)
+
+
 class Config(BaseModel):
     # 监控/扫描的源目录（可多个）
     source_dirs: List[Path]
@@ -77,9 +87,15 @@ class Config(BaseModel):
     # 类别取值见 plugins.base.CATEGORIES：scraper/subscriber/downloader/notifier
     plugins: Dict[str, List[PluginSpec]] = Field(default_factory=dict)
 
+    # 订阅条目：每条选一个订阅器类型 + 参数（取代 plugins.subscriber 的运行角色）
+    subscriptions: List[Subscription] = Field(default_factory=list)
+
     def plugin_specs(self, category: str) -> List[PluginSpec]:
         """返回某类别下 enabled 的插件实例配置。"""
         return [s for s in self.plugins.get(category, []) if s.enabled]
+
+    def enabled_subscriptions(self) -> List[Subscription]:
+        return [s for s in self.subscriptions if s.enabled]
 
 
 def load_config(path: Path) -> Config:

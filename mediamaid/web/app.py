@@ -6,6 +6,7 @@ API 在 /api/* 下；其余路径返回构建好的 index.html，交给前端路
 
 from __future__ import annotations
 
+import uuid
 from pathlib import Path
 from typing import List, Optional
 
@@ -69,6 +70,21 @@ class ReleaseBody(BaseModel):
     magnet: Optional[str] = None
     torrent_url: Optional[str] = None
     link: Optional[str] = None
+    sub_id: Optional[str] = None
+
+
+class SubscriptionBody(BaseModel):
+    name: str
+    subscriber: str
+    enabled: bool = True
+    config: dict = {}
+
+
+class SubscriptionUpdate(BaseModel):
+    name: Optional[str] = None
+    subscriber: Optional[str] = None
+    enabled: Optional[bool] = None
+    config: Optional[dict] = None
 
 
 class FiltersBody(BaseModel):
@@ -289,22 +305,97 @@ def create_app(config_path: Path) -> FastAPI:
             "seen": store.release_seen(rel.guid),
         }
 
-    @app.get("/api/subscriptions/preview")
-    async def api_sub_preview():
-        config = cfg()
-        runner = SubscribeRunner(config, store)
-        releases = await run_in_threadpool(runner.preview)
+    def _sub_dict(sub) -> dict:
         return {
-            "subscribers": [s.name for s in runner.subscribers],
-            "releases": [_release_dict(r) for r in releases],
+            "id": sub.id,
+            "name": sub.name,
+            "subscriber": sub.subscriber,
+            "enabled": sub.enabled,
+            "config": dict(sub.config),
+            "processed": store.count_for(sub.id),
         }
 
-    @app.get("/api/releases")
-    def api_releases(limit: int = 200):
+    def _find_sub(sub_id: str):
+        sub = next((s for s in cfg().subscriptions if s.id == sub_id), None)
+        if sub is None:
+            raise HTTPException(404, f"订阅不存在: {sub_id}")
+        return sub
+
+    # 可用订阅器类型 + schema（添加订阅表单用）
+    @app.get("/api/subscribers")
+    def api_subscribers():
+        out = []
+        for name in available("subscriber"):
+            cls = get_plugin("subscriber", name)
+            out.append({"name": name, "schema": cls.ConfigModel.model_json_schema()})
+        return {"subscribers": out}
+
+    @app.get("/api/subscriptions")
+    def api_subscriptions():
+        return {"subscriptions": [_sub_dict(s) for s in cfg().subscriptions]}
+
+    @app.post("/api/subscriptions")
+    def api_sub_create(body: SubscriptionBody):
+        try:
+            cls = get_plugin("subscriber", body.subscriber)
+        except KeyError:
+            raise HTTPException(404, f"未知订阅器: {body.subscriber}")
+        try:
+            cls.ConfigModel.model_validate(body.config)
+        except ValidationError as e:
+            raise HTTPException(422, e.errors())
+        sub_id = uuid.uuid4().hex[:8]
+        cfgio.add_subscription(
+            config_path,
+            {
+                "id": sub_id,
+                "name": body.name,
+                "subscriber": body.subscriber,
+                "enabled": body.enabled,
+                "config": body.config,
+            },
+        )
+        manager.reload()
+        return _sub_dict(_find_sub(sub_id))
+
+    @app.put("/api/subscriptions/{sub_id}")
+    def api_sub_update(sub_id: str, body: SubscriptionUpdate):
+        sub = _find_sub(sub_id)
+        subscriber = body.subscriber or sub.subscriber
+        config = body.config if body.config is not None else sub.config
+        try:
+            cls = get_plugin("subscriber", subscriber)
+            cls.ConfigModel.model_validate(config)
+        except KeyError:
+            raise HTTPException(404, f"未知订阅器: {subscriber}")
+        except ValidationError as e:
+            raise HTTPException(422, e.errors())
+        fields = body.model_dump(exclude_none=True)
+        cfgio.update_subscription(config_path, sub_id, fields)
+        manager.reload()
+        return _sub_dict(_find_sub(sub_id))
+
+    @app.delete("/api/subscriptions/{sub_id}")
+    def api_sub_delete(sub_id: str):
+        _find_sub(sub_id)
+        cfgio.delete_subscription(config_path, sub_id)
+        manager.reload()
+        return {"ok": True}
+
+    @app.get("/api/subscriptions/{sub_id}/preview")
+    async def api_sub_preview(sub_id: str):
+        sub = _find_sub(sub_id)
+        runner = SubscribeRunner(cfg(), store)
+        releases = await run_in_threadpool(runner.preview, sub)
+        return {"releases": [_release_dict(r) for r in releases]}
+
+    @app.get("/api/subscriptions/{sub_id}/releases")
+    def api_sub_releases(sub_id: str, limit: int = 200):
+        _find_sub(sub_id)
         return {
             "releases": [
                 {"guid": g, "title": t, "ts": ts}
-                for (g, t, ts) in store.recent_releases(limit)
+                for (g, t, ts) in store.releases_for(sub_id, limit)
             ]
         }
 
@@ -321,7 +412,7 @@ def create_app(config_path: Path) -> FastAPI:
             torrent_url=rel.torrent_url,
             link=rel.link,
         )
-        ok = await run_in_threadpool(runner.download_release, release)
+        ok = await run_in_threadpool(runner.download_release, release, rel.sub_id)
         if not ok:
             raise HTTPException(502, "下载器未接受该资源")
         return {"ok": True}
