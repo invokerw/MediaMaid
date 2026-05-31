@@ -338,6 +338,26 @@ def test_parser_types_and_crud_and_test(client):
     assert c.delete(f"/api/parsers/{pid}").status_code == 200
 
 
+def test_parse_test_dir(client, tmp_path):
+    c, _ = client
+    # 模拟一个合集文件夹：一个种子下了好几集
+    src = tmp_path / "downloads"
+    pack = src / "Some.Show.S01.Complete"
+    pack.mkdir()
+    (pack / "Some.Show.S01E01.1080p.mkv").write_bytes(b"0" * (60 * 1024 * 1024))
+    (pack / "Some.Show.S01E02.1080p.mkv").write_bytes(b"0" * (60 * 1024 * 1024))
+
+    r = c.post("/api/parse/test-dir", json={"path": str(pack)})
+    assert r.status_code == 200
+    results = r.json()["results"]
+    # 合集里每个文件都被单独解析为剧集
+    eps = sorted(x["episode"] for x in results if x["matched"])
+    assert eps == [1, 2]
+
+    # 越界目录 → 403
+    assert c.post("/api/parse/test-dir", json={"path": "/etc"}).status_code == 403
+
+
 def test_subscribers_types_have_schema(client):
     c, _ = client
     r = c.get("/api/subscribers")

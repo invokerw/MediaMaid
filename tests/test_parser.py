@@ -49,6 +49,17 @@ def test_chain_first_match_wins(tmp_path):
     assert res.title == "遮天"
 
 
+def test_regex_only_still_falls_back_to_guessit(tmp_path):
+    # 只配了正则解析器，普通命名仍应被 guessit 兜底解析
+    cfg = _cfg(tmp_path, [
+        ParserSpec(id="r1", name="遮天", parser="regex", config={"pattern": r"(?P<title>NOMATCH)"}),
+    ])
+    ident = Identifier(cfg)
+    res, matched = ident.parse_name("Breaking.Bad.S01E01.1080p.mkv")
+    assert matched == "guessit"
+    assert "Breaking Bad" in res.title
+
+
 def test_chain_empty_falls_back_to_guessit(tmp_path):
     cfg = _cfg(tmp_path, [])
     ident = Identifier(cfg)

@@ -18,15 +18,22 @@ log = get_logger(__name__)
 
 
 def build_parsers(config: Config) -> List[Parser]:
-    """按 config.parsers 顺序构建解析器链；为空则回退内置 guessit。"""
+    """按 config.parsers 顺序构建解析器链。
+
+    自定义解析器按序在前；guessit 始终作为最后兜底（用户未显式配置 guessit 时自动追加），
+    这样加了正则解析器也不会让普通命名失去通用解析。
+    """
     load_plugins()
     chain: List[Parser] = []
+    has_guessit = False
     for spec in config.enabled_parsers():
         try:
             chain.append(create("parser", spec.parser, spec.config))
+            if spec.parser == "guessit":
+                has_guessit = True
         except Exception as e:  # noqa: BLE001
             log.error("加载解析器 %s(%s) 失败: %s", spec.name, spec.parser, e)
-    if not chain:
+    if not has_guessit:
         chain.append(create("parser", "guessit"))
     return chain
 

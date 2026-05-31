@@ -26,7 +26,6 @@ import {
   SubscriberType,
   ReleaseRow,
   SeenRelease,
-  ParseTestResult,
 } from "../api";
 import SchemaFields from "../components/SchemaFields";
 
@@ -216,72 +215,8 @@ function SubDetail({ sub }: { sub: SubscriptionRow }) {
     <Tabs
       items={[
         { key: "preview", label: "当前可见资源", children: <PreviewTab sub={sub} /> },
-        { key: "parse", label: "解析测试", children: <ParseTab sub={sub} /> },
         { key: "done", label: `已处理 (${sub.processed})`, children: <DoneTab sub={sub} /> },
       ]}
-    />
-  );
-}
-
-function ParseTab({ sub }: { sub: SubscriptionRow }) {
-  const [rows, setRows] = useState<
-    { title: string; matched: string | null; type?: string; ptitle?: string; season?: number | null; episode?: number | null }[]
-  >([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    setLoading(true);
-    api
-      .subPreview(sub.id)
-      .then(async (d) => {
-        const out = await Promise.all(
-          d.releases.map(async (r) => {
-            const p: ParseTestResult = await api
-              .parseTest(r.title)
-              .catch(() => ({ matched: null }));
-            return {
-              title: r.title,
-              matched: p.matched,
-              type: p.type,
-              ptitle: p.title,
-              season: p.season,
-              episode: p.episode,
-            };
-          })
-        );
-        setRows(out);
-      })
-      .catch((e) => message.error(String(e)))
-      .finally(() => setLoading(false));
-  }, [sub.id]);
-
-  const columns: ColumnsType<(typeof rows)[number]> = [
-    { title: "原始标题", dataIndex: "title", ellipsis: true },
-    {
-      title: "解析结果",
-      render: (_, r) =>
-        r.matched ? (
-          <Space wrap>
-            <Tag color="green">{r.matched}</Tag>
-            <Tag color="blue">{r.ptitle}</Tag>
-            {r.type && <Tag>{r.type}</Tag>}
-            {r.season != null && <Tag>S{r.season}</Tag>}
-            {r.episode != null && <Tag>E{r.episode}</Tag>}
-          </Space>
-        ) : (
-          <Tag color="warning">未解析出</Tag>
-        ),
-    },
-  ];
-
-  return (
-    <Table
-      rowKey="title"
-      size="small"
-      loading={loading}
-      columns={columns}
-      dataSource={rows}
-      pagination={rows.length > 15 ? { pageSize: 15 } : false}
     />
   );
 }

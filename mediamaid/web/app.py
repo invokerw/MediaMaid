@@ -591,12 +591,12 @@ def create_app(config_path: Path) -> FastAPI:
         manager.reload()
         return {"ok": True}
 
-    @app.post("/api/parse/test")
-    def api_parse_test(body: ParseTestBody):
-        res, matched = Identifier(cfg()).parse_name(body.name)
+    def _parse_one(ident, name: str) -> dict:
+        res, matched = ident.parse_name(name)
         if res is None:
-            return {"matched": None}
+            return {"name": name, "matched": None}
         return {
+            "name": name,
             "matched": matched,
             "type": res.type.value,
             "title": res.title,
@@ -604,6 +604,27 @@ def create_app(config_path: Path) -> FastAPI:
             "season": res.season,
             "episode": res.episode,
         }
+
+    @app.post("/api/parse/test")
+    def api_parse_test(body: ParseTestBody):
+        # 对单个文件名测试解析（解析的是文件名，不是种子标题）
+        return _parse_one(Identifier(cfg()), body.name)
+
+    @app.post("/api/parse/test-dir")
+    def api_parse_test_dir(body: DeleteBody, limit: int = 300):
+        """对某目录下真实下载的文件逐个测试解析（合集文件夹会递归到每个文件）。"""
+        base = _safe(body.path)
+        if not base.is_dir():
+            raise HTTPException(400, "不是目录")
+        ident = Identifier(cfg())
+        results = []
+        for p in sorted(base.rglob("*")):
+            if not ident.accept_file(p):
+                continue
+            results.append({**_parse_one(ident, p.name), "path": str(p)})
+            if len(results) >= limit:
+                break
+        return {"results": results}
 
     @app.get("/api/subscriptions")
     def api_subscriptions():

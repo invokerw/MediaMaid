@@ -198,6 +198,11 @@ export const api = {
     put<ParserRow>(`/api/parsers/${id}`, body),
   deleteParser: (id: string) => send<{ ok: boolean }>("DELETE", `/api/parsers/${id}`),
   parseTest: (name: string) => post<ParseTestResult>("/api/parse/test", { name }),
+  parseTestDir: (path: string) =>
+    post<{ results: (ParseTestResult & { name: string; path: string })[] }>(
+      "/api/parse/test-dir",
+      { path }
+    ),
   subscriberTypes: () => get<{ subscribers: SubscriberType[] }>("/api/subscribers"),
   subscriptions: () => get<{ subscriptions: SubscriptionRow[] }>("/api/subscriptions"),
   createSubscription: (body: {
