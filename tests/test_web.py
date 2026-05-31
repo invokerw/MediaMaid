@@ -117,6 +117,16 @@ def test_fs_list_bad_path(client):
     assert r.json()["error"]
 
 
+def test_diag_hardlink(client):
+    c, tmp_path = client
+    # client fixture 的 source_dir 与 library 同在 tmp_path 下 → 同一文件系统
+    r = c.get("/api/diag/hardlink")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["results"], "应有至少一个源目录结果"
+    assert all(x["ok"] for x in body["results"])
+
+
 def test_plugins_expose_schema(client):
     c, _ = client
     r = c.get("/api/plugins")

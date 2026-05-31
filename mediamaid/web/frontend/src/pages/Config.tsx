@@ -9,10 +9,12 @@ import {
   Card,
   Collapse,
   Divider,
+  Alert,
+  Space,
   Typography,
   message,
 } from "antd";
-import { FolderOpenOutlined } from "@ant-design/icons";
+import { FolderOpenOutlined, LinkOutlined } from "@ant-design/icons";
 import { api, Settings } from "../api";
 import PathInput from "../components/PathInput";
 import DirPicker from "../components/DirPicker";
@@ -24,6 +26,22 @@ export default function Config() {
   const [saving, setSaving] = useState(false);
   const [raw, setRaw] = useState<{ path: string; text: string } | null>(null);
   const [pickSrc, setPickSrc] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [hl, setHl] = useState<
+    { source: string; library: string; ok: boolean; detail: string }[] | null
+  >(null);
+
+  async function checkHardlink() {
+    setChecking(true);
+    try {
+      const r = await api.diagHardlink();
+      setHl(r.results);
+    } catch (e) {
+      message.error(String(e));
+    } finally {
+      setChecking(false);
+    }
+  }
 
   const loadRaw = () => api.config().then(setRaw).catch(() => {});
 
@@ -63,17 +81,30 @@ export default function Config() {
         >
           {tags("回车输入或点下方按钮选择")}
         </Form.Item>
-        <Button
-          size="small"
-          icon={<FolderOpenOutlined />}
-          onClick={() => setPickSrc(true)}
-          style={{ marginBottom: 16 }}
-        >
-          添加目录
-        </Button>
+        <Space style={{ marginBottom: 16 }}>
+          <Button size="small" icon={<FolderOpenOutlined />} onClick={() => setPickSrc(true)}>
+            添加目录
+          </Button>
+        </Space>
         <Form.Item name="library_dir" label="媒体库根目录" rules={[{ required: true }]}>
           <PathInput placeholder="/data/media" />
         </Form.Item>
+        <Button icon={<LinkOutlined />} loading={checking} onClick={checkHardlink}>
+          检测硬链接可用性
+        </Button>
+        {hl && (
+          <Space direction="vertical" style={{ width: "100%", marginTop: 12 }}>
+            {hl.map((r) => (
+              <Alert
+                key={r.source}
+                type={r.ok ? "success" : "warning"}
+                showIcon
+                message={r.source}
+                description={r.detail}
+              />
+            ))}
+          </Space>
+        )}
       </Card>
 
       <DirPicker

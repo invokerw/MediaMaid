@@ -6,6 +6,8 @@ API 在 /api/* 下；其余路径返回构建好的 index.html，交给前端路
 
 from __future__ import annotations
 
+import errno
+import os
 import uuid
 from pathlib import Path
 from typing import List, Optional
@@ -267,6 +269,47 @@ def create_app(config_path: Path) -> FastAPI:
         except OSError as e:
             result["error"] = str(e)
         return result
+
+    @app.get("/api/diag/hardlink")
+    def api_diag_hardlink():
+        """逐源目录实测能否硬链到媒体库（同一文件系统才行，否则回退复制）。"""
+        config = cfg()
+        lib = Path(config.library_dir)
+        lib_ok, lib_err = True, ""
+        try:
+            lib.mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            lib_ok, lib_err = False, str(e)
+
+        results = []
+        for src in config.source_dirs:
+            src = Path(src)
+            entry = {"source": str(src), "library": str(lib), "ok": False, "detail": ""}
+            if not src.is_dir():
+                entry["detail"] = "源目录不存在"
+            elif not lib_ok:
+                entry["detail"] = f"媒体库不可写: {lib_err}"
+            else:
+                s = src / f".mm_hltest_{uuid.uuid4().hex[:8]}"
+                d = lib / f".mm_hltest_{uuid.uuid4().hex[:8]}"
+                try:
+                    s.write_bytes(b"x")
+                    os.link(s, d)
+                    entry["ok"] = True
+                    entry["detail"] = "同一文件系统，硬链接可用 ✓"
+                except OSError as e:
+                    if e.errno == errno.EXDEV:
+                        entry["detail"] = "跨设备/不同挂载，硬链接不可用，将回退为复制"
+                    else:
+                        entry["detail"] = f"硬链接失败: {e}"
+                finally:
+                    for p in (d, s):
+                        try:
+                            p.unlink()
+                        except OSError:
+                            pass
+            results.append(entry)
+        return {"action": config.action.value, "results": results}
 
     @app.get("/api/settings")
     def api_settings_get():

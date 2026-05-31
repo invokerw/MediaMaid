@@ -147,6 +147,11 @@ export const api = {
     }),
   settings: () => get<Settings>("/api/settings"),
   updateSettings: (body: Partial<Settings>) => put<Settings>("/api/settings", body),
+  diagHardlink: () =>
+    get<{
+      action: string;
+      results: { source: string; library: string; ok: boolean; detail: string }[];
+    }>("/api/diag/hardlink"),
   fsList: (path?: string) =>
     get<{ path: string; parent: string; dirs: { name: string; path: string }[]; error: string | null }>(
       "/api/fs" + (path ? `?path=${encodeURIComponent(path)}` : "")
