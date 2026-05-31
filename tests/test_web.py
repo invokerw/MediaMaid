@@ -93,3 +93,63 @@ def test_spa_served_at_root(client):
 def test_unknown_api_404(client):
     c, _ = client
     assert c.get("/api/nope").status_code == 404
+
+
+def test_plugins_expose_schema(client):
+    c, _ = client
+    r = c.get("/api/plugins")
+    cats = {cat["category"]: cat for cat in r.json()["categories"]}
+    tmdb = next(e for e in cats["scraper"]["entries"] if e["name"] == "tmdb")
+    assert "api_key" in tmdb["schema"]["properties"]
+    log = next(e for e in cats["notifier"]["entries"] if e["name"] == "log")
+    assert log["schema"]["properties"] == {} or "properties" not in log["schema"] \
+        or log["schema"].get("properties") == {}
+
+
+def test_plugin_update_persists_and_reloads(client):
+    from mediamaid.config import load_config
+
+    c, tmp_path = client
+    cfg_path = tmp_path / "config.yaml"
+
+    # 配置并启用 tmdb
+    r = c.put(
+        "/api/plugins/scraper/tmdb",
+        json={"enabled": True, "config": {"api_key": "abc", "language": "en-US"}},
+    )
+    assert r.status_code == 200
+    assert r.json()["enabled"] is True
+    assert r.json()["config"]["api_key"] == "abc"
+
+    # 写回磁盘且可被 load_config 读到
+    reloaded = load_config(cfg_path)
+    specs = {s.name: s for s in reloaded.plugin_specs("scraper")}
+    assert "tmdb" in specs and specs["tmdb"].config["language"] == "en-US"
+
+    # 停用
+    r = c.put("/api/plugins/scraper/tmdb", json={"enabled": False, "config": {"api_key": "abc"}})
+    assert r.json()["enabled"] is False
+
+
+def test_plugin_update_validation_error(client):
+    c, _ = client
+    # tmdb 必填 api_key，缺失 → 422
+    r = c.put("/api/plugins/scraper/tmdb", json={"enabled": True, "config": {}})
+    assert r.status_code == 422
+
+
+def test_plugin_update_preserves_comments(client):
+    c, tmp_path = client
+    cfg_path = tmp_path / "config.yaml"
+    # 追加注释
+    original = cfg_path.read_text(encoding="utf-8")
+    cfg_path.write_text("# 我的配置注释\n" + original, encoding="utf-8")
+
+    c.put("/api/plugins/notifier/log", json={"enabled": True, "config": {}})
+    assert "# 我的配置注释" in cfg_path.read_text(encoding="utf-8")
+
+
+def test_update_unknown_plugin_404(client):
+    c, _ = client
+    r = c.put("/api/plugins/scraper/nope", json={"enabled": True, "config": {}})
+    assert r.status_code == 404

@@ -9,16 +9,17 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from starlette.concurrency import run_in_threadpool
 
+from . import cfgio
 from ..config import load_config
 from ..logging_conf import get_logger
 from ..pipeline import Pipeline
-from ..plugins import CATEGORIES, available, load_plugins
+from ..plugins import CATEGORIES, available, get as get_plugin, load_plugins
 from ..store import Record, StateStore
 from ..subscribe import SubscribeRunner
 
@@ -51,11 +52,34 @@ class ScanBody(BaseModel):
     dry_run: bool = False
 
 
+class PluginBody(BaseModel):
+    enabled: bool = True
+    config: dict = {}
+
+
+def _plugin_entry(config, category: str, name: str) -> dict:
+    """组装单个插件的 UI 信息：启停 + 当前配置 + 配置 schema。"""
+    spec = next((s for s in config.plugins.get(category, []) if s.name == name), None)
+    cls = get_plugin(category, name)
+    return {
+        "name": name,
+        "enabled": bool(spec.enabled) if spec else False,
+        "configured": spec is not None,
+        "config": dict(spec.config) if spec else {},
+        "schema": cls.ConfigModel.model_json_schema(),
+    }
+
+
 def create_app(config_path: Path) -> FastAPI:
     config_path = Path(config_path)
     load_plugins()
-    config = load_config(config_path)
-    store = StateStore(config.state_db)
+    # 可变持有者：写盘后热重载，处理器一律读 cfg()
+    state = {"config": load_config(config_path)}
+
+    def cfg():
+        return state["config"]
+
+    store = StateStore(cfg().state_db)
 
     app = FastAPI(title="MediaMaid")
 
@@ -76,18 +100,33 @@ def create_app(config_path: Path) -> FastAPI:
 
     @app.get("/api/plugins")
     def api_plugins():
-        categories = []
-        for cat in CATEGORIES:
-            enabled = {s.name for s in config.plugin_specs(cat)}
-            categories.append(
-                {
-                    "category": cat,
-                    "entries": [
-                        {"name": n, "enabled": n in enabled} for n in available(cat)
-                    ],
-                }
-            )
+        config = cfg()
+        categories = [
+            {
+                "category": cat,
+                "entries": [_plugin_entry(config, cat, n) for n in available(cat)],
+            }
+            for cat in CATEGORIES
+        ]
         return {"categories": categories}
+
+    @app.put("/api/plugins/{category}/{name}")
+    def api_plugin_update(category: str, name: str, body: PluginBody):
+        if category not in CATEGORIES:
+            raise HTTPException(404, f"未知类别: {category}")
+        try:
+            cls = get_plugin(category, name)
+        except KeyError:
+            raise HTTPException(404, f"未知插件: {category}/{name}")
+        # 校验配置
+        try:
+            cls.ConfigModel.model_validate(body.config)
+        except ValidationError as e:
+            raise HTTPException(422, e.errors())
+        # 持久化(保留注释) + 热重载
+        cfgio.upsert_plugin(config_path, category, name, body.enabled, body.config)
+        state["config"] = load_config(config_path)
+        return _plugin_entry(state["config"], category, name)
 
     @app.get("/api/config")
     def api_config():
@@ -99,7 +138,7 @@ def create_app(config_path: Path) -> FastAPI:
 
     @app.post("/api/scan")
     async def api_scan(body: ScanBody):
-        pipeline = Pipeline(config, store)
+        pipeline = Pipeline(cfg(), store)
         results = await run_in_threadpool(pipeline.scan, body.dry_run)
         summary: dict = {}
         items = []
@@ -116,6 +155,7 @@ def create_app(config_path: Path) -> FastAPI:
 
     @app.post("/api/subscribe")
     async def api_subscribe():
+        config = cfg()
         runner = SubscribeRunner(config, store, notify=Pipeline(config, store).notify)
         submitted = await run_in_threadpool(runner.run_once)
         return {"submitted": submitted}
