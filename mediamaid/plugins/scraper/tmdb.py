@@ -52,6 +52,12 @@ class TMDBScraper(Scraper):
             log.warning("TMDB 请求失败 %s: %s", path, e)
             return None
 
+    def test(self):
+        data = self._get("/configuration")
+        if data and "images" in data:
+            return True, "TMDB API key 有效"
+        return False, "TMDB 连接失败：请检查 API key 或网络"
+
     def scrape(self, item: MediaItem) -> Optional[MediaInfo]:
         if item.media_type == MediaType.MOVIE:
             return self._scrape_movie(item)

@@ -38,11 +38,15 @@ def build_downloaders(config: Config) -> List[Downloader]:
 
 class SubscribeRunner:
     def __init__(self, config: Config, store: StateStore, notify=None):
-        self.config = config
         self.store = store
+        self._notify = notify or (lambda e: None)
+        self.reload(config)
+
+    def reload(self, config: Config) -> None:
+        """用新配置重建订阅器/下载器（热重载用）。"""
+        self.config = config
         self.subscribers = build_subscribers(config)
         self.downloaders = build_downloaders(config)
-        self._notify = notify or (lambda e: None)
 
     def run_once(self) -> int:
         """跑一轮：返回本轮新提交下载的数量。"""

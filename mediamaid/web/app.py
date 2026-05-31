@@ -7,8 +7,9 @@ API 在 /api/* 下；其余路径返回构建好的 index.html，交给前端路
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
+import yaml
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -16,7 +17,7 @@ from pydantic import BaseModel, ValidationError
 from starlette.concurrency import run_in_threadpool
 
 from . import cfgio
-from ..config import load_config
+from ..config import Config, ConfigManager
 from ..logging_conf import get_logger
 from ..pipeline import Pipeline
 from ..plugins import CATEGORIES, available, get as get_plugin, load_plugins
@@ -57,6 +58,69 @@ class PluginBody(BaseModel):
     config: dict = {}
 
 
+class TestBody(BaseModel):
+    config: dict = {}
+
+
+class FiltersBody(BaseModel):
+    video_extensions: Optional[List[str]] = None
+    min_size_mb: Optional[int] = None
+    exclude_keywords: Optional[List[str]] = None
+
+
+class NamingBody(BaseModel):
+    movie: Optional[str] = None
+    episode: Optional[str] = None
+    movie_no_year: Optional[str] = None
+    episode_no_year: Optional[str] = None
+
+
+class SettingsBody(BaseModel):
+    """顶层可编辑设置，全部可选；仅提交的字段会被更新。"""
+
+    source_dirs: Optional[List[str]] = None
+    library_dir: Optional[str] = None
+    action: Optional[str] = None
+    on_conflict: Optional[str] = None
+    stable_seconds: Optional[int] = None
+    rescan_interval: Optional[int] = None
+    subscribe_interval: Optional[int] = None
+    poll_completed: Optional[bool] = None
+    poll_interval: Optional[int] = None
+    write_nfo: Optional[bool] = None
+    download_artwork: Optional[bool] = None
+    filters: Optional[FiltersBody] = None
+    naming: Optional[NamingBody] = None
+
+
+def _settings_dict(config: Config) -> dict:
+    """把当前配置序列化为前端可编辑的设置视图。"""
+    return {
+        "source_dirs": [str(p) for p in config.source_dirs],
+        "library_dir": str(config.library_dir),
+        "action": config.action.value,
+        "on_conflict": config.on_conflict,
+        "stable_seconds": config.stable_seconds,
+        "rescan_interval": config.rescan_interval,
+        "subscribe_interval": config.subscribe_interval,
+        "poll_completed": config.poll_completed,
+        "poll_interval": config.poll_interval,
+        "write_nfo": config.write_nfo,
+        "download_artwork": config.download_artwork,
+        "filters": {
+            "video_extensions": config.filters.video_extensions,
+            "min_size_mb": config.filters.min_size_mb,
+            "exclude_keywords": config.filters.exclude_keywords,
+        },
+        "naming": {
+            "movie": config.naming.movie,
+            "episode": config.naming.episode,
+            "movie_no_year": config.naming.movie_no_year,
+            "episode_no_year": config.naming.episode_no_year,
+        },
+    }
+
+
 def _plugin_entry(config, category: str, name: str) -> dict:
     """组装单个插件的 UI 信息：启停 + 当前配置 + 配置 schema。"""
     spec = next((s for s in config.plugins.get(category, []) if s.name == name), None)
@@ -73,11 +137,11 @@ def _plugin_entry(config, category: str, name: str) -> dict:
 def create_app(config_path: Path) -> FastAPI:
     config_path = Path(config_path)
     load_plugins()
-    # 可变持有者：写盘后热重载，处理器一律读 cfg()
-    state = {"config": load_config(config_path)}
+    # ConfigManager：按文件 mtime 自动热重载，处理器一律读 cfg()
+    manager = ConfigManager(config_path)
 
     def cfg():
-        return state["config"]
+        return manager.get()
 
     store = StateStore(cfg().state_db)
 
@@ -125,8 +189,26 @@ def create_app(config_path: Path) -> FastAPI:
             raise HTTPException(422, e.errors())
         # 持久化(保留注释) + 热重载
         cfgio.upsert_plugin(config_path, category, name, body.enabled, body.config)
-        state["config"] = load_config(config_path)
-        return _plugin_entry(state["config"], category, name)
+        config = manager.reload()
+        return _plugin_entry(config, category, name)
+
+    @app.post("/api/plugins/{category}/{name}/test")
+    async def api_plugin_test(category: str, name: str, body: TestBody):
+        if category not in CATEGORIES:
+            raise HTTPException(404, f"未知类别: {category}")
+        try:
+            cls = get_plugin(category, name)
+        except KeyError:
+            raise HTTPException(404, f"未知插件: {category}/{name}")
+        try:
+            inst = cls(cls.ConfigModel.model_validate(body.config))
+        except ValidationError as e:
+            raise HTTPException(422, e.errors())
+        try:
+            ok, msg = await run_in_threadpool(inst.test)
+        except Exception as e:  # noqa: BLE001
+            ok, msg = False, f"测试异常: {e}"
+        return {"ok": ok, "message": msg}
 
     @app.get("/api/config")
     def api_config():
@@ -135,6 +217,31 @@ def create_app(config_path: Path) -> FastAPI:
         except OSError as e:
             text = f"# 无法读取配置文件: {e}"
         return {"path": str(config_path), "text": text}
+
+    @app.get("/api/settings")
+    def api_settings_get():
+        return _settings_dict(cfg())
+
+    @app.put("/api/settings")
+    def api_settings_put(body: SettingsBody):
+        values = body.model_dump(exclude_none=True)
+        # 校验：把当前 yaml 与提交值合并后整体校验
+        try:
+            with config_path.open("r", encoding="utf-8") as f:
+                merged = yaml.safe_load(f) or {}
+        except OSError:
+            merged = {}
+        for k, v in values.items():
+            if k in ("filters", "naming") and isinstance(v, dict):
+                merged.setdefault(k, {}).update(v)
+            else:
+                merged[k] = v
+        try:
+            Config.model_validate(merged)
+        except ValidationError as e:
+            raise HTTPException(422, e.errors())
+        cfgio.update_settings(config_path, values)
+        return _settings_dict(manager.reload())
 
     @app.post("/api/scan")
     async def api_scan(body: ScanBody):

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import List, Optional, Type
+from typing import List, Optional, Tuple, Type
 
 from pydantic import BaseModel
 
@@ -33,6 +33,10 @@ class Plugin(ABC):
 
     def __init__(self, config: BaseModel):
         self.config = config
+
+    def test(self) -> Tuple[bool, str]:
+        """连接/可用性自检。基类默认无需测试；子类可覆写做实测。"""
+        return True, "该插件无需连接测试"
 
     def __repr__(self) -> str:  # pragma: no cover - 便于调试
         return f"<{self.category}:{self.name}>"
@@ -81,6 +85,14 @@ class Notifier(Plugin):
     @abstractmethod
     def notify(self, event: Event) -> None:
         raise NotImplementedError
+
+    def test(self) -> Tuple[bool, str]:
+        """发送一条测试通知。"""
+        try:
+            self.notify(Event("info", "MediaMaid 连接测试"))
+            return True, "已发送测试通知（请到接收端确认）"
+        except Exception as e:  # noqa: BLE001
+            return False, f"发送失败: {e}"
 
 
 # 类别名 -> 基类，供 registry 校验插件归属

@@ -53,12 +53,16 @@ def build_notifiers(config: Config) -> List[Notifier]:
 
 class Pipeline:
     def __init__(self, config: Config, store: Optional[StateStore] = None):
+        self.store = store
+        self.reload(config)
+
+    def reload(self, config: Config) -> None:
+        """用新配置重建标识器/刮削器/通知器/整理器（热重载用，store 不变）。"""
         self.config = config
         self.identifier = Identifier(config.filters)
         self.scrapers = build_scrapers(config)
         self.notifiers = build_notifiers(config)
         self.organizer = Organizer(config)
-        self.store = store
 
     def _scrape(self, item: MediaItem) -> Optional[MediaInfo]:
         """链式刮削：依次尝试各刮削器，返回首个命中的结果。"""

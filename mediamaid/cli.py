@@ -9,7 +9,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from .config import load_config
+from .config import ConfigManager, load_config
 from .daemon import Daemon
 from .logging_conf import setup_logging, get_logger
 from .pipeline import Pipeline
@@ -64,9 +64,11 @@ def run(
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ):
     """全自动闭环守护：订阅→下载→监控→识别/刮削/整理→通知，一条龙常驻。"""
-    cfg = _load(config, verbose)
-    with StateStore(cfg.state_db) as store:
-        Daemon(cfg, store).run()
+    setup_logging(verbose)
+    load_plugins()
+    manager = ConfigManager(config)
+    with StateStore(manager.get().state_db) as store:
+        Daemon(manager, store).run()
 
 
 @app.command()

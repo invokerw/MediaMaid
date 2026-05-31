@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Card, Switch, Button, Typography, Space, Drawer, Tag, List, message } from "antd";
-import { SettingOutlined } from "@ant-design/icons";
+import { SettingOutlined, ThunderboltOutlined } from "@ant-design/icons";
 import { api, PluginCategory, PluginEntry } from "../api";
 import PluginForm from "../components/PluginForm";
 
@@ -54,6 +54,17 @@ export default function Plugins() {
     }
   }
 
+  async function testPlugin(category: string, entry: PluginEntry) {
+    message.loading({ content: `测试 ${entry.name}…`, key: "test" });
+    try {
+      const r = await api.testPlugin(category, entry.name, entry.config);
+      if (r.ok) message.success({ content: r.message, key: "test" });
+      else message.error({ content: r.message, key: "test" });
+    } catch (e) {
+      message.error({ content: String(e), key: "test" });
+    }
+  }
+
   const hasParams = (e: PluginEntry) =>
     Object.keys(e.schema.properties ?? {}).length > 0;
 
@@ -80,6 +91,14 @@ export default function Plugins() {
                       checked={e.enabled}
                       onChange={(v) => toggle(cat.category, e, v)}
                     />,
+                    <Button
+                      key="test"
+                      type="link"
+                      icon={<ThunderboltOutlined />}
+                      onClick={() => testPlugin(cat.category, e)}
+                    >
+                      测试
+                    </Button>,
                     <Button
                       key="cfg"
                       type="link"

@@ -131,6 +131,22 @@ class Watcher:
         finally:
             self.stop()
 
+    def reload(self, config: Config) -> None:
+        """热重载：更新配置；若源目录变化则重挂监控。"""
+        old_dirs = [str(p) for p in self.config.source_dirs]
+        new_dirs = [str(p) for p in config.source_dirs]
+        self.config = config
+        if old_dirs != new_dirs and self._observer.is_alive():
+            self._observer.unschedule_all()
+            handler = _Handler(self._on_candidate)
+            for src in config.source_dirs:
+                src = Path(src)
+                if not src.exists():
+                    log.warning("源目录不存在，跳过监控: %s", src)
+                    continue
+                self._observer.schedule(handler, str(src), recursive=True)
+                log.info("重挂监控目录: %s", src)
+
     def stop(self) -> None:
         self._stop.set()
         self._observer.stop()

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Form, Input, InputNumber, Switch, Button, Typography, message } from "antd";
+import { Form, Input, InputNumber, Switch, Button, Space, Typography, message } from "antd";
 import { api, PluginEntry } from "../api";
 
 const { Text } = Typography;
@@ -20,6 +20,7 @@ export default function PluginForm({
   const fields = Object.keys(props);
   const [form] = Form.useForm();
   const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
 
   // 初始值：当前配置优先，否则用 schema 默认
   const initial: Record<string, unknown> = {};
@@ -27,17 +28,22 @@ export default function PluginForm({
     initial[key] = entry.config[key] ?? props[key].default;
   }
 
-  async function onFinish(values: Record<string, unknown>) {
+  function collect(): Record<string, unknown> {
+    const values = form.getFieldsValue();
+    const config: Record<string, unknown> = {};
+    for (const key of fields) {
+      const v = values[key];
+      if (v !== undefined && v !== null && v !== "") config[key] = v;
+    }
+    return config;
+  }
+
+  async function onFinish() {
     setSaving(true);
     try {
-      const config: Record<string, unknown> = {};
-      for (const key of fields) {
-        const v = values[key];
-        if (v !== undefined && v !== null && v !== "") config[key] = v;
-      }
       const updated = await api.updatePlugin(category, entry.name, {
         enabled: entry.enabled,
-        config,
+        config: collect(),
       });
       message.success("已保存");
       onSaved(updated);
@@ -45,6 +51,19 @@ export default function PluginForm({
       message.error(String(e));
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function onTest() {
+    setTesting(true);
+    try {
+      const r = await api.testPlugin(category, entry.name, collect());
+      if (r.ok) message.success(r.message);
+      else message.error(r.message);
+    } catch (e) {
+      message.error(String(e));
+    } finally {
+      setTesting(false);
     }
   }
 
@@ -78,9 +97,14 @@ export default function PluginForm({
           </Form.Item>
         );
       })}
-      <Button type="primary" htmlType="submit" loading={saving}>
-        保存
-      </Button>
+      <Space>
+        <Button type="primary" htmlType="submit" loading={saving}>
+          保存
+        </Button>
+        <Button onClick={onTest} loading={testing}>
+          测试连接
+        </Button>
+      </Space>
     </Form>
   );
 }

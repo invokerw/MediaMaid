@@ -57,6 +57,16 @@ class QbittorrentDownloader(Downloader):
         self._client = client
         return client
 
+    def test(self):
+        client = self._conn()
+        if client is None:
+            return False, "qBittorrent 登录失败：检查地址/账号密码或依赖是否安装"
+        try:
+            ver = client.app.version
+        except Exception:  # noqa: BLE001
+            ver = "?"
+        return True, f"已连接 qBittorrent {ver}"
+
     def add(self, release: Release) -> bool:
         uri = release.download_uri
         if not uri:

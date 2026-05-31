@@ -12,6 +12,19 @@ from mediamaid.store import StateStore
 BIG = b"0" * (60 * 1024 * 1024)  # >50MB 过 min_size 过滤
 
 
+class _Mgr:
+    """测试用的轻量 ConfigManager 替身（固定配置）。"""
+
+    def __init__(self, cfg):
+        self._cfg = cfg
+
+    def get(self):
+        return self._cfg
+
+    def reload(self):
+        return self._cfg
+
+
 def _cfg(tmp_path: Path, **extra) -> Config:
     src = tmp_path / "downloads"
     src.mkdir()
@@ -69,7 +82,7 @@ def test_poll_completed_organizes_then_dedups(tmp_path):
     _CompletedDl.paths = [done_dir]
 
     with StateStore(cfg.state_db) as store:
-        daemon = Daemon(cfg, store)
+        daemon = Daemon(_Mgr(cfg), store)
         assert daemon._poll_completed_once() == 1
         assert (cfg.library_dir / "Movies" / "Inception (2010)" /
                 "Inception (2010).mkv").exists()
@@ -114,7 +127,7 @@ def test_closed_loop_end_to_end(tmp_path):
     _DEST_DIR["path"] = cfg.source_dirs[0]
 
     with StateStore(cfg.state_db) as store:
-        daemon = Daemon(cfg, store)
+        daemon = Daemon(_Mgr(cfg), store)
         t = threading.Thread(target=daemon.run, daemon=True)
         t.start()
         # 等待：订阅落盘 + 稳定(1s) + 整理

@@ -153,3 +153,56 @@ def test_update_unknown_plugin_404(client):
     c, _ = client
     r = c.put("/api/plugins/scraper/nope", json={"enabled": True, "config": {}})
     assert r.status_code == 404
+
+
+def test_plugin_test_endpoint(client):
+    c, _ = client
+    # log 通知器：发测试通知，应 ok
+    r = c.post("/api/plugins/notifier/log/test", json={"config": {}})
+    assert r.status_code == 200
+    assert r.json()["ok"] is True
+
+
+def test_plugin_test_validation_error(client):
+    c, _ = client
+    # tmdb 缺 api_key → 422
+    r = c.post("/api/plugins/scraper/tmdb/test", json={"config": {}})
+    assert r.status_code == 422
+
+
+def test_settings_get(client):
+    c, _ = client
+    r = c.get("/api/settings")
+    assert r.status_code == 200
+    body = r.json()
+    assert "library_dir" in body and "filters" in body and "naming" in body
+
+
+def test_settings_update_and_reload(client):
+    from mediamaid.config import load_config
+
+    c, tmp_path = client
+    cfg_path = tmp_path / "config.yaml"
+    r = c.put(
+        "/api/settings",
+        json={
+            "action": "copy",
+            "filters": {"min_size_mb": 123},
+            "naming": {"movie": "Films/{title}.{ext}"},
+        },
+    )
+    assert r.status_code == 200
+    assert r.json()["action"] == "copy"
+    assert r.json()["filters"]["min_size_mb"] == 123
+
+    reloaded = load_config(cfg_path)
+    assert reloaded.action.value == "copy"
+    assert reloaded.filters.min_size_mb == 123
+    assert reloaded.naming.movie == "Films/{title}.{ext}"
+
+
+def test_settings_validation_error(client):
+    c, _ = client
+    # action 非法 → 422
+    r = c.put("/api/settings", json={"action": "teleport"})
+    assert r.status_code == 422

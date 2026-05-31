@@ -38,6 +38,31 @@ export interface PluginCategory {
   entries: PluginEntry[];
 }
 
+export interface Settings {
+  source_dirs: string[];
+  library_dir: string;
+  action: string;
+  on_conflict: string;
+  stable_seconds: number;
+  rescan_interval: number;
+  subscribe_interval: number;
+  poll_completed: boolean;
+  poll_interval: number;
+  write_nfo: boolean;
+  download_artwork: boolean;
+  filters: {
+    video_extensions: string[];
+    min_size_mb: number;
+    exclude_keywords: string[];
+  };
+  naming: {
+    movie: string;
+    episode: string;
+    movie_no_year: string;
+    episode_no_year: string;
+  };
+}
+
 export interface ScanResult {
   dry_run: boolean;
   summary: Record<string, number>;
@@ -84,6 +109,12 @@ export const api = {
     name: string,
     body: { enabled: boolean; config: Record<string, unknown> }
   ) => put<PluginEntry>(`/api/plugins/${category}/${name}`, body),
+  testPlugin: (category: string, name: string, config: Record<string, unknown>) =>
+    post<{ ok: boolean; message: string }>(`/api/plugins/${category}/${name}/test`, {
+      config,
+    }),
+  settings: () => get<Settings>("/api/settings"),
+  updateSettings: (body: Partial<Settings>) => put<Settings>("/api/settings", body),
   config: () => get<{ path: string; text: string }>("/api/config"),
   scan: (dry_run: boolean) => post<ScanResult>("/api/scan", { dry_run }),
   subscribe: () => post<{ submitted: number }>("/api/subscribe"),

@@ -90,3 +90,40 @@ def load_config(path: Path) -> Config:
     with path.open("r", encoding="utf-8") as f:
         data = yaml.safe_load(f) or {}
     return Config.model_validate(data)
+
+
+class ConfigManager:
+    """持有当前配置，按文件 mtime+size 自动热重载（线程安全）。
+
+    Web 与守护进程都用它读配置：任一方写盘后，其他读取方下次 get() 自动感知。
+    """
+
+    def __init__(self, path: Path):
+        import threading
+
+        self.path = Path(path)
+        self._lock = threading.Lock()
+        self._stamp = None
+        self._cfg: Config = None  # type: ignore[assignment]
+        self.reload()
+
+    def _file_stamp(self):
+        try:
+            st = self.path.stat()
+            return (st.st_mtime, st.st_size)
+        except OSError:
+            return None
+
+    def reload(self) -> Config:
+        with self._lock:
+            self._cfg = load_config(self.path)
+            self._stamp = self._file_stamp()
+            return self._cfg
+
+    def get(self) -> Config:
+        """返回当前配置；若文件已变更则先自动重载。"""
+        with self._lock:
+            if self._file_stamp() != self._stamp:
+                self._cfg = load_config(self.path)
+                self._stamp = self._file_stamp()
+            return self._cfg

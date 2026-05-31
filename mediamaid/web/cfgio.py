@@ -59,3 +59,38 @@ def upsert_plugin(
 
     with path.open("w", encoding="utf-8") as f:
         yaml.dump(data, f)
+
+
+# 嵌套对象类键，做 mapping 级合并而非整体替换
+_NESTED_KEYS = {"filters", "naming"}
+
+
+def update_settings(path: Path, values: dict) -> None:
+    """更新 config.yaml 的顶层设置（保留注释）。
+
+    values 中 filters/naming 做子键合并，其余顶层键直接赋值；值为 None 的键忽略。
+    """
+    path = Path(path)
+    yaml = _yaml()
+    if path.exists():
+        with path.open("r", encoding="utf-8") as f:
+            data = yaml.load(f) or {}
+    else:
+        data = {}
+
+    for key, val in values.items():
+        if val is None:
+            continue
+        if key in _NESTED_KEYS and isinstance(val, dict):
+            sub = data.get(key)
+            if not isinstance(sub, dict):
+                sub = {}
+                data[key] = sub
+            for k, v in val.items():
+                if v is not None:
+                    sub[k] = v
+        else:
+            data[key] = val
+
+    with path.open("w", encoding="utf-8") as f:
+        yaml.dump(data, f)

@@ -29,6 +29,13 @@ class RSSSubscriber(Subscriber):
     name = "rss"
     ConfigModel = RSSConfig
 
+    def test(self):
+        try:
+            releases = self.fetch()
+        except Exception as e:  # noqa: BLE001
+            return False, f"RSS 抓取失败: {e}"
+        return True, f"RSS 可达，抓取到 {len(releases)} 条"
+
     def fetch(self) -> List[Release]:
         try:
             import feedparser  # 惰性 import
