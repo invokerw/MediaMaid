@@ -31,12 +31,6 @@ import SchemaFields from "../components/SchemaFields";
 
 const { Paragraph } = Typography;
 
-function fmtSize(n: number | null): string {
-  if (!n) return "-";
-  const gb = n / 1024 ** 3;
-  return gb >= 1 ? gb.toFixed(2) + " GB" : (n / 1024 ** 2).toFixed(1) + " MB";
-}
-
 export default function Subscriptions() {
   const [subs, setSubs] = useState<SubscriptionRow[]>([]);
   const [types, setTypes] = useState<SubscriberType[]>([]);
@@ -270,19 +264,20 @@ function PreviewTab({ sub }: { sub: SubscriptionRow }) {
       render: (s) => (s ? <Tag>已处理</Tag> : <Tag color="processing">新</Tag>),
     },
     { title: "标题", dataIndex: "title", ellipsis: true },
-    { title: "大小", dataIndex: "size", width: 100, render: fmtSize },
     {
-      title: "",
-      width: 70,
+      title: "操作",
+      width: 110,
       render: (_, r) => (
         <Button
           type="link"
           size="small"
           icon={<DownloadOutlined />}
           loading={dl === r.guid}
-          disabled={r.seen || (!r.magnet && !r.torrent_url)}
+          disabled={!r.magnet && !r.torrent_url}
           onClick={() => download(r)}
-        />
+        >
+          {r.seen ? "重新处理" : "下载"}
+        </Button>
       ),
     },
   ];
