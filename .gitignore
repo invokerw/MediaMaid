@@ -7,7 +7,12 @@ build/
 dist/
 config.yaml
 *.db
+*.db-shm
+*.db-wal
 .pytest_cache/
+
+# 本地演示用目录（占位媒体文件/运行库），不入库
+demo/
 
 # 前端：源码与构建产物(web/static)提交；仅忽略依赖与缓存
 mediamaid/web/frontend/node_modules/

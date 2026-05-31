@@ -1,75 +1,114 @@
 import { useEffect, useState } from "react";
+import {
+  Row,
+  Col,
+  Card,
+  Statistic,
+  Button,
+  Space,
+  Typography,
+  message,
+} from "antd";
+import {
+  EyeOutlined,
+  PlayCircleOutlined,
+  CloudDownloadOutlined,
+} from "@ant-design/icons";
 import { api, Dashboard as DashboardData, ScanResult } from "../api";
 import RecordsTable from "../components/RecordsTable";
 
-const CARDS: [string, string][] = [
-  ["已整理", "done"],
-  ["跳过", "skipped"],
-  ["失败", "failed"],
+const { Title, Paragraph } = Typography;
+
+const CARDS: { label: string; key: string; color?: string }[] = [
+  { label: "已整理", key: "done", color: "#3fb950" },
+  { label: "跳过", key: "skipped", color: "#d4a72c" },
+  { label: "失败", key: "failed", color: "#f85149" },
 ];
 
 export default function Dashboard() {
   const [data, setData] = useState<DashboardData | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<unknown>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [result, setResult] = useState<string | null>(null);
 
-  const load = () => api.dashboard().then(setData).catch((e) => setError(String(e)));
+  const load = () =>
+    api
+      .dashboard()
+      .then(setData)
+      .catch((e) => message.error(String(e)))
+      .finally(() => setLoading(false));
+
   useEffect(() => {
     load();
   }, []);
 
-  async function run(fn: () => Promise<unknown>) {
-    setBusy(true);
-    setError(null);
+  async function run(tag: string, fn: () => Promise<unknown>, okMsg: string) {
+    setBusy(tag);
     try {
       const r = await fn();
-      setResult(r);
+      setResult(formatResult(r));
+      message.success(okMsg);
       await load();
     } catch (e) {
-      setError(String(e));
+      message.error(String(e));
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   }
 
   return (
     <>
-      <h1>仪表盘</h1>
+      <Title level={3}>仪表盘</Title>
 
-      <section className="cards">
-        {CARDS.map(([label, key]) => (
-          <div className="card" key={key}>
-            <div className="num">{data?.counts[key] ?? 0}</div>
-            <div className="lbl">{label}</div>
-          </div>
+      <Row gutter={16}>
+        {CARDS.map((c) => (
+          <Col key={c.key} xs={8}>
+            <Card>
+              <Statistic
+                title={c.label}
+                value={data?.counts[c.key] ?? 0}
+                valueStyle={{ color: c.color }}
+              />
+            </Card>
+          </Col>
         ))}
-      </section>
+      </Row>
 
-      <section className="actions">
-        <button onClick={() => run(() => api.scan(true))} disabled={busy}>
+      <Space style={{ margin: "20px 0" }} wrap>
+        <Button
+          icon={<EyeOutlined />}
+          loading={busy === "dry"}
+          onClick={() => run("dry", () => api.scan(true), "预览完成")}
+        >
           扫描预览 (dry-run)
-        </button>
-        <button
-          className="primary"
-          onClick={() => run(() => api.scan(false))}
-          disabled={busy}
+        </Button>
+        <Button
+          type="primary"
+          icon={<PlayCircleOutlined />}
+          loading={busy === "scan"}
+          onClick={() => run("scan", () => api.scan(false), "扫描整理完成")}
         >
           执行扫描整理
-        </button>
-        <button onClick={() => run(() => api.subscribe())} disabled={busy}>
+        </Button>
+        <Button
+          icon={<CloudDownloadOutlined />}
+          loading={busy === "sub"}
+          onClick={() => run("sub", () => api.subscribe(), "订阅已运行")}
+        >
           运行订阅一轮
-        </button>
-        {busy && <span>⏳ 处理中…</span>}
-      </section>
+        </Button>
+      </Space>
 
-      {error && <pre className="result error">{error}</pre>}
-      {result != null && (
-        <pre className="result">{formatResult(result)}</pre>
+      {result && (
+        <Card size="small" title="执行结果" style={{ marginBottom: 24 }}>
+          <Paragraph className="result mono" style={{ marginBottom: 0 }}>
+            {result}
+          </Paragraph>
+        </Card>
       )}
 
-      <h2>最近记录</h2>
-      <RecordsTable records={data?.records ?? []} />
+      <Title level={4}>最近记录</Title>
+      <RecordsTable records={data?.records ?? []} loading={loading} />
     </>
   );
 }
@@ -77,14 +116,12 @@ export default function Dashboard() {
 function formatResult(r: unknown): string {
   const s = r as ScanResult;
   if (s && s.summary) {
-    const head = s.dry_run ? "[预览] " : "";
-    const summary = Object.entries(s.summary)
-      .map(([k, v]) => `${k}: ${v}`)
-      .join("  ");
+    const head = (s.dry_run ? "[预览] " : "") +
+      Object.entries(s.summary).map(([k, v]) => `${k}: ${v}`).join("   ");
     const lines = (s.items || []).map(
       (i) => `  ${i.status.padEnd(8)} ${i.source}${i.dest ? "  →  " + i.dest : ""}`
     );
-    return [head + summary, ...lines].join("\n");
+    return [head, ...lines].join("\n");
   }
   return JSON.stringify(r, null, 2);
 }

@@ -1,38 +1,46 @@
+import { Table, Tag } from "antd";
+import type { ColumnsType } from "antd/es/table";
 import { RecordRow } from "../api";
 
-export default function RecordsTable({ records }: { records: RecordRow[] }) {
+const STATUS_COLOR: Record<string, string> = {
+  done: "success",
+  skipped: "warning",
+  failed: "error",
+};
+
+const columns: ColumnsType<RecordRow> = [
+  { title: "ID", dataIndex: "id", width: 64 },
+  {
+    title: "状态",
+    dataIndex: "status",
+    width: 100,
+    render: (s: string) => <Tag color={STATUS_COLOR[s] || "default"}>{s}</Tag>,
+  },
+  { title: "动作", dataIndex: "action", width: 100, render: (a) => a || "-" },
+  { title: "源文件", dataIndex: "src_name", ellipsis: true },
+  {
+    title: "目标",
+    dataIndex: "dst_name",
+    ellipsis: true,
+    render: (d) => d || "-",
+  },
+];
+
+export default function RecordsTable({
+  records,
+  loading,
+}: {
+  records: RecordRow[];
+  loading?: boolean;
+}) {
   return (
-    <table className="grid">
-      <thead>
-        <tr>
-          <th>ID</th>
-          <th>状态</th>
-          <th>动作</th>
-          <th>源文件</th>
-          <th>目标</th>
-        </tr>
-      </thead>
-      <tbody>
-        {records.length === 0 ? (
-          <tr>
-            <td colSpan={5} className="empty">
-              暂无记录
-            </td>
-          </tr>
-        ) : (
-          records.map((r) => (
-            <tr key={r.id}>
-              <td>{r.id}</td>
-              <td>
-                <span className={`badge ${r.status}`}>{r.status}</span>
-              </td>
-              <td>{r.action || "-"}</td>
-              <td className="mono">{r.src_name}</td>
-              <td className="mono">{r.dst_name || "-"}</td>
-            </tr>
-          ))
-        )}
-      </tbody>
-    </table>
+    <Table
+      rowKey="id"
+      size="middle"
+      columns={columns}
+      dataSource={records}
+      loading={loading}
+      pagination={records.length > 20 ? { pageSize: 20 } : false}
+    />
   );
 }
