@@ -80,6 +80,23 @@ class SubscribeRunner:
                 return True
         return False
 
+    def preview(self) -> List[Release]:
+        """抓取所有订阅器当前可见资源（不去重、不下载），用于预览。"""
+        out: List[Release] = []
+        for sub in self.subscribers:
+            try:
+                out.extend(sub.fetch())
+            except Exception as e:  # noqa: BLE001
+                log.error("订阅器 %s 抓取失败: %s", sub.name, e)
+        return out
+
+    def download_release(self, rel: Release) -> bool:
+        """手动下载单条资源：提交下载器成功则标记已处理。"""
+        ok = self._dispatch(rel)
+        if ok:
+            self.store.mark_release(rel.guid, rel.title)
+        return ok
+
     def run_loop(self, interval: int) -> None:
         log.info("订阅守护启动，每 %ds 一轮（Ctrl-C 退出）", interval)
         try:

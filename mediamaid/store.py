@@ -178,3 +178,12 @@ class StateStore:
                 (guid, title, time.time()),
             )
             self.conn.commit()
+
+    def recent_releases(self, limit: int = 200) -> List[tuple]:
+        """返回已处理(见过)的资源 [(guid, title, ts), ...]，最近在前。"""
+        with self._lock:
+            cur = self.conn.execute(
+                "SELECT guid, title, ts FROM seen_releases ORDER BY ts DESC LIMIT ?",
+                (limit,),
+            )
+            return [(r["guid"], r["title"], r["ts"]) for r in cur.fetchall()]

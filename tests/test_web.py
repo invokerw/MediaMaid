@@ -206,3 +206,51 @@ def test_settings_validation_error(client):
     # action 非法 → 422
     r = c.put("/api/settings", json={"action": "teleport"})
     assert r.status_code == 422
+
+
+def _enable_rss_dummy(c, tmp_path):
+    """配置一个本地 RSS 订阅器 + dummy 下载器。"""
+    feed = tmp_path / "feed.xml"
+    feed.write_text(
+        '<?xml version="1.0"?><rss version="2.0"><channel><title>t</title>'
+        '<item><title>The.Matrix.1999.1080p</title><guid>m1</guid>'
+        '<link>magnet:?xt=urn:btih:A</link></item>'
+        '</channel></rss>',
+        encoding="utf-8",
+    )
+    c.put(
+        "/api/plugins/subscriber/rss",
+        json={"enabled": True, "config": {"url": f"file://{feed}"}},
+    )
+    c.put(
+        "/api/plugins/downloader/dummy",
+        json={"enabled": True, "config": {"save_path": str(tmp_path / "dl"), "size_mb": 1}},
+    )
+
+
+def test_subscription_preview_and_download(client):
+    c, tmp_path = client
+    _enable_rss_dummy(c, tmp_path)
+
+    r = c.get("/api/subscriptions/preview")
+    assert r.status_code == 200
+    body = r.json()
+    assert "rss" in body["subscribers"]
+    rel = next(x for x in body["releases"] if x["title"] == "The.Matrix.1999.1080p")
+    assert rel["seen"] is False
+    guid = rel["guid"]
+
+    # 手动下载该资源 → dummy 建文件 + 标记已处理
+    r = c.post(
+        "/api/releases/download",
+        json={"title": rel["title"], "guid": guid, "magnet": rel["magnet"],
+              "torrent_url": None, "link": None},
+    )
+    assert r.status_code == 200
+    assert (tmp_path / "dl" / "The.Matrix.1999.1080p.mkv").exists()
+
+    # 已处理资源历史出现该条；预览里该条 seen=True
+    assert any(x["guid"] == guid for x in c.get("/api/releases").json()["releases"])
+    rel2 = next(x for x in c.get("/api/subscriptions/preview").json()["releases"]
+                if x["guid"] == guid)
+    assert rel2["seen"] is True

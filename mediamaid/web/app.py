@@ -19,6 +19,7 @@ from starlette.concurrency import run_in_threadpool
 from . import cfgio
 from ..config import Config, ConfigManager
 from ..logging_conf import get_logger
+from ..models import Release
 from ..pipeline import Pipeline
 from ..plugins import CATEGORIES, available, get as get_plugin, load_plugins
 from ..store import Record, StateStore
@@ -60,6 +61,14 @@ class PluginBody(BaseModel):
 
 class TestBody(BaseModel):
     config: dict = {}
+
+
+class ReleaseBody(BaseModel):
+    title: str
+    guid: str
+    magnet: Optional[str] = None
+    torrent_url: Optional[str] = None
+    link: Optional[str] = None
 
 
 class FiltersBody(BaseModel):
@@ -266,6 +275,56 @@ def create_app(config_path: Path) -> FastAPI:
         runner = SubscribeRunner(config, store, notify=Pipeline(config, store).notify)
         submitted = await run_in_threadpool(runner.run_once)
         return {"submitted": submitted}
+
+    def _release_dict(rel) -> dict:
+        return {
+            "title": rel.title,
+            "guid": rel.guid,
+            "magnet": rel.magnet,
+            "torrent_url": rel.torrent_url,
+            "link": rel.link,
+            "size": rel.size,
+            "pub_date": rel.pub_date,
+            "source": rel.source,
+            "seen": store.release_seen(rel.guid),
+        }
+
+    @app.get("/api/subscriptions/preview")
+    async def api_sub_preview():
+        config = cfg()
+        runner = SubscribeRunner(config, store)
+        releases = await run_in_threadpool(runner.preview)
+        return {
+            "subscribers": [s.name for s in runner.subscribers],
+            "releases": [_release_dict(r) for r in releases],
+        }
+
+    @app.get("/api/releases")
+    def api_releases(limit: int = 200):
+        return {
+            "releases": [
+                {"guid": g, "title": t, "ts": ts}
+                for (g, t, ts) in store.recent_releases(limit)
+            ]
+        }
+
+    @app.post("/api/releases/download")
+    async def api_release_download(rel: ReleaseBody):
+        config = cfg()
+        runner = SubscribeRunner(config, store, notify=Pipeline(config, store).notify)
+        if not runner.downloaders:
+            raise HTTPException(400, "未配置下载器")
+        release = Release(
+            title=rel.title,
+            guid=rel.guid,
+            magnet=rel.magnet,
+            torrent_url=rel.torrent_url,
+            link=rel.link,
+        )
+        ok = await run_in_threadpool(runner.download_release, release)
+        if not ok:
+            raise HTTPException(502, "下载器未接受该资源")
+        return {"ok": True}
 
     # ---- 托管 React SPA ----
     assets = _STATIC / "assets"

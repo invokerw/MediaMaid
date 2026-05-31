@@ -63,6 +63,24 @@ export interface Settings {
   };
 }
 
+export interface ReleaseRow {
+  title: string;
+  guid: string;
+  magnet: string | null;
+  torrent_url: string | null;
+  link: string | null;
+  size: number | null;
+  pub_date: string | null;
+  source: string | null;
+  seen: boolean;
+}
+
+export interface SeenRelease {
+  guid: string;
+  title: string;
+  ts: number;
+}
+
 export interface ScanResult {
   dry_run: boolean;
   summary: Record<string, number>;
@@ -115,6 +133,16 @@ export const api = {
     }),
   settings: () => get<Settings>("/api/settings"),
   updateSettings: (body: Partial<Settings>) => put<Settings>("/api/settings", body),
+  subPreview: () =>
+    get<{ subscribers: string[]; releases: ReleaseRow[] }>("/api/subscriptions/preview"),
+  seenReleases: () => get<{ releases: SeenRelease[] }>("/api/releases"),
+  downloadRelease: (rel: {
+    title: string;
+    guid: string;
+    magnet: string | null;
+    torrent_url: string | null;
+    link: string | null;
+  }) => post<{ ok: boolean }>("/api/releases/download", rel),
   config: () => get<{ path: string; text: string }>("/api/config"),
   scan: (dry_run: boolean) => post<ScanResult>("/api/scan", { dry_run }),
   subscribe: () => post<{ submitted: number }>("/api/subscribe"),
