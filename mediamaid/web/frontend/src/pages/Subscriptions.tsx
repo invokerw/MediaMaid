@@ -9,7 +9,6 @@ import {
   Form,
   Input,
   Select,
-  Drawer,
   Tabs,
   Popconfirm,
   Typography,
@@ -203,15 +202,16 @@ export default function Subscriptions() {
         </Form>
       </Modal>
 
-      <Drawer
+      <Modal
         title={detail ? `订阅详情 · ${detail.name}` : ""}
-        width={560}
+        width={760}
         open={!!detail}
-        onClose={() => setDetail(null)}
+        onCancel={() => setDetail(null)}
+        footer={null}
         destroyOnClose
       >
         {detail && <SubDetail sub={detail} />}
-      </Drawer>
+      </Modal>
     </>
   );
 }
