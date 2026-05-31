@@ -50,14 +50,21 @@ def render_dest(
     item: MediaItem,
     info: Optional[MediaInfo],
     config: NamingConfig,
+    category: str = "tv",
 ) -> Path:
-    """返回相对于媒体库根目录的目标路径。"""
+    """返回相对于媒体库根目录的目标路径。
+
+    category: tv / anime（仅对剧集生效，决定 TV/ 还是 Anime/ 目录）；电影走电影模板。
+    """
     fields = _merge(item, info)
 
     if item.media_type == MediaType.MOVIE:
         template = config.movie if fields["year"] else config.movie_no_year
     elif item.media_type == MediaType.EPISODE:
-        template = config.episode if fields["year"] else config.episode_no_year
+        if category == "anime":
+            template = config.anime if fields["year"] else config.anime_no_year
+        else:
+            template = config.episode if fields["year"] else config.episode_no_year
     else:
         raise ValueError(f"无法为未知类型生成路径: {item.source}")
 

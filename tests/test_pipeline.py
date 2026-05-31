@@ -46,6 +46,20 @@ def test_dry_run_does_not_write(tmp_path):
     assert not cfg.library_dir.exists()
 
 
+def test_anime_keyword_routes_to_anime_dir(tmp_path):
+    cfg = _make_config(tmp_path)
+    cfg.anime_keywords = ["anime"]
+    src = cfg.source_dirs[0]
+    anime_dir = src / "anime"
+    anime_dir.mkdir()
+    (anime_dir / "Shrouding.the.Heavens.S01E02.1080p.mkv").write_bytes(b"0" * (60 * 1024 * 1024))
+    with StateStore(cfg.state_db) as store:
+        Pipeline(cfg, store).scan()
+    # 命中 anime 关键词 → 进 Anime/ 目录
+    hits = list((cfg.library_dir / "Anime").rglob("*.mkv"))
+    assert hits, "动漫文件应整理进 Anime/ 目录"
+
+
 def test_dedup_skips_second_run(tmp_path):
     cfg = _make_config(tmp_path)
     src = cfg.source_dirs[0]

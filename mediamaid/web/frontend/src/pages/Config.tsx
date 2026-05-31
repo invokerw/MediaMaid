@@ -174,6 +174,13 @@ export default function Config() {
         <Form.Item name={["filters", "exclude_keywords"]} label="排除关键词">
           {tags("sample")}
         </Form.Item>
+        <Form.Item
+          name="anime_keywords"
+          label="动漫归类关键词"
+          tooltip="源文件路径命中任一关键词的剧集归入 Anime/ 目录。建议动漫订阅下载到名含 anime 的子目录，或填字幕组名。"
+        >
+          {tags("如 anime、动漫、字幕组名")}
+        </Form.Item>
       </Card>
 
       <Card size="small" title="命名模板" style={{ marginTop: 16 }}>
@@ -187,6 +194,12 @@ export default function Config() {
           <Input />
         </Form.Item>
         <Form.Item name={["naming", "episode_no_year"]} label="剧集（无年份）">
+          <Input />
+        </Form.Item>
+        <Form.Item name={["naming", "anime"]} label="动漫">
+          <Input />
+        </Form.Item>
+        <Form.Item name={["naming", "anime_no_year"]} label="动漫（无年份）">
           <Input />
         </Form.Item>
       </Card>

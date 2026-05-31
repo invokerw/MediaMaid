@@ -50,6 +50,7 @@ export interface Settings {
   poll_interval: number;
   write_nfo: boolean;
   download_artwork: boolean;
+  anime_keywords: string[];
   filters: {
     video_extensions: string[];
     min_size_mb: number;
@@ -60,6 +61,8 @@ export interface Settings {
     episode: string;
     movie_no_year: string;
     episode_no_year: string;
+    anime: string;
+    anime_no_year: string;
   };
 }
 

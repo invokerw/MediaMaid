@@ -38,10 +38,16 @@ naming:
   movie_no_year: "Movies/{title}/{title}.{ext}"
   episode: "TV/{show} ({year})/Season {season:02d}/{show} - S{season:02d}E{episode:02d}.{ext}"
   episode_no_year: "TV/{show}/Season {season:02d}/{show} - S{season:02d}E{episode:02d}.{ext}"
+  anime: "Anime/{show} ({year})/Season {season:02d}/{show} - S{season:02d}E{episode:02d}.{ext}"
+  anime_no_year: "Anime/{show}/Season {season:02d}/{show} - S{season:02d}E{episode:02d}.{ext}"
 
 # 后处理（非某个插件专属）
 write_nfo: false
 download_artwork: false
+
+# 动漫归类：源文件路径命中任一关键词的剧集归入 Anime/ 目录
+# （建议把动漫订阅下载到名含 anime 的子目录，或填字幕组名）
+anime_keywords: []   # 如 [anime, 动漫]
 
 # 插件配置：类别 -> 该类别启用的插件实例列表。
 # 用 `mediamaid plugins` 查看全部可用插件。

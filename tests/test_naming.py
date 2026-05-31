@@ -30,5 +30,17 @@ def test_scraped_info_overrides_title():
     assert dest == Path("Movies/The Matrix (1999)/The Matrix (1999).mkv")
 
 
+def test_anime_category_path():
+    item = MediaItem(Path("x.mkv"), MediaType.EPISODE, "遮天", season=1, episode=2)
+    dest = naming.render_dest(item, None, NamingConfig(), category="anime")
+    assert dest == Path("Anime/遮天/Season 01/遮天 - S01E02.mkv")
+
+
+def test_tv_category_default():
+    item = MediaItem(Path("x.mkv"), MediaType.EPISODE, "Breaking Bad", season=1, episode=1)
+    dest = naming.render_dest(item, None, NamingConfig(), category="tv")
+    assert dest.parts[0] == "TV"
+
+
 def test_sanitize_illegal_chars():
     assert naming.sanitize('a/b:c*?d') == "a b c d"

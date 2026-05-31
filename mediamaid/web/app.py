@@ -110,6 +110,8 @@ class NamingBody(BaseModel):
     episode: Optional[str] = None
     movie_no_year: Optional[str] = None
     episode_no_year: Optional[str] = None
+    anime: Optional[str] = None
+    anime_no_year: Optional[str] = None
 
 
 class SettingsBody(BaseModel):
@@ -126,6 +128,7 @@ class SettingsBody(BaseModel):
     poll_interval: Optional[int] = None
     write_nfo: Optional[bool] = None
     download_artwork: Optional[bool] = None
+    anime_keywords: Optional[List[str]] = None
     filters: Optional[FiltersBody] = None
     naming: Optional[NamingBody] = None
 
@@ -144,6 +147,7 @@ def _settings_dict(config: Config) -> dict:
         "poll_interval": config.poll_interval,
         "write_nfo": config.write_nfo,
         "download_artwork": config.download_artwork,
+        "anime_keywords": config.anime_keywords,
         "filters": {
             "video_extensions": config.filters.video_extensions,
             "min_size_mb": config.filters.min_size_mb,
@@ -154,6 +158,8 @@ def _settings_dict(config: Config) -> dict:
             "episode": config.naming.episode,
             "movie_no_year": config.naming.movie_no_year,
             "episode_no_year": config.naming.episode_no_year,
+            "anime": config.naming.anime,
+            "anime_no_year": config.naming.anime_no_year,
         },
     }
 
