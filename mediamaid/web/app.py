@@ -243,6 +243,31 @@ def create_app(config_path: Path) -> FastAPI:
             text = f"# 无法读取配置文件: {e}"
         return {"path": str(config_path), "text": text}
 
+    @app.get("/api/fs")
+    def api_fs(path: Optional[str] = None):
+        """列出某目录下的子目录，供前端目录选择器使用。"""
+        base = Path(path).expanduser() if path else Path.home()
+        result = {"path": str(base), "parent": str(base.parent), "dirs": [], "error": None}
+        try:
+            if not base.is_dir():
+                result["error"] = "不是目录或不存在"
+                return result
+            dirs = []
+            for child in sorted(base.iterdir(), key=lambda p: p.name.lower()):
+                if child.name.startswith("."):
+                    continue
+                try:
+                    if child.is_dir():
+                        dirs.append({"name": child.name, "path": str(child)})
+                except OSError:
+                    continue
+            result["dirs"] = dirs
+        except PermissionError:
+            result["error"] = "无权限访问该目录"
+        except OSError as e:
+            result["error"] = str(e)
+        return result
+
     @app.get("/api/settings")
     def api_settings_get():
         return _settings_dict(cfg())

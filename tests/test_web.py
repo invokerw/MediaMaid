@@ -95,6 +95,28 @@ def test_unknown_api_404(client):
     assert c.get("/api/nope").status_code == 404
 
 
+def test_fs_list(client, tmp_path):
+    c, _ = client
+    base = tmp_path / "browse"
+    base.mkdir()
+    (base / "subA").mkdir()
+    (base / "subB").mkdir()
+    (base / "file.txt").write_text("x", encoding="utf-8")
+    r = c.get("/api/fs", params={"path": str(base)})
+    assert r.status_code == 200
+    body = r.json()
+    names = {d["name"] for d in body["dirs"]}
+    assert names == {"subA", "subB"}  # 只列目录，不含 file.txt
+    assert body["error"] is None
+
+
+def test_fs_list_bad_path(client):
+    c, _ = client
+    r = c.get("/api/fs", params={"path": "/no/such/dir/xyz"})
+    assert r.status_code == 200
+    assert r.json()["error"]
+
+
 def test_plugins_expose_schema(client):
     c, _ = client
     r = c.get("/api/plugins")

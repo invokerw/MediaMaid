@@ -4,13 +4,37 @@ services:
     container_name: mediamaid
     restart: unless-stopped
     environment:
-      - PUID=1000
-      - PGID=1000
       - TZ=Asia/Shanghai
+    ports:
+      - "8500:8500"          # Web 管理界面
     volumes:
       - ./config:/config
-      # 源目录与媒体库必须挂在同一个 volume/挂载点下，
-      # 否则跨设备无法硬链接（会回退为复制）。
-      - /data:/data
-    # 默认 entrypoint 为 watch；如只想跑一次整理：
-    # command: ["scan", "-c", "/config/config.yaml"]
+      # ⭐ 关键：把存放下载与媒体库的【同一个宿主目录】挂到 /data。
+      # 源目录(下载) 和 媒体库 都放在 /data 下 → 同一文件系统 → 硬链接生效。
+      - /srv/media:/data
+    # 默认 entrypoint 跑闭环守护(run)；若只想跑 Web 管理：
+    command: ["web", "-c", "/config/config.yaml", "--host", "0.0.0.0", "--port", "8500"]
+
+  # ───────────────────────────────────────────────────────────────
+  # 下载器示例（qBittorrent）。要点：用【与 MediaMaid 完全相同】的
+  # 宿主→容器映射，这样两边看到的路径一致，且与媒体库同盘可硬链接。
+  # qbittorrent:
+  #   image: lscr.io/linuxserver/qbittorrent:latest
+  #   container_name: qbittorrent
+  #   restart: unless-stopped
+  #   environment:
+  #     - PUID=1000
+  #     - PGID=1000
+  #     - TZ=Asia/Shanghai
+  #     - WEBUI_PORT=8080
+  #   ports:
+  #     - "8080:8080"
+  #   volumes:
+  #     - ./qb-config:/config
+  #     - /srv/media:/data        # 与 MediaMaid 相同！下载保存到 /data/downloads
+  #
+  # 然后在 MediaMaid 配置：
+  #   source_dirs: [/data/downloads]
+  #   library_dir: /data/media
+  #   下载器 qbittorrent.save_path: /data/downloads
+  # 路径两边一致 → 无需 path_mappings，硬链接直接可用。

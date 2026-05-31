@@ -133,10 +133,35 @@ class BarkNotifier(Notifier):
 **Docker**（编辑 `docker-compose.yml` 的挂载与 `config/config.yaml`）：
 
 ```bash
-docker compose up -d        # 常驻监控
+docker compose up -d
 ```
 
-> ⚠️ 源目录与媒体库需挂在同一挂载点下，否则跨设备无法硬链接（自动回退复制）。
+### Docker 与目录（重要）
+
+媒体工具最常见的坑就是目录/路径。遵循一条规则即可避免：
+
+**① 同一挂载点**：把存放「下载」与「媒体库」的**同一个宿主目录**挂到容器（如 `/srv/media → /data`），让 `source_dirs`(下载) 和 `library_dir`(媒体库) 都在 `/data` 下。它们同属一个文件系统 → **硬链接生效**（否则跨设备会自动回退为复制，占双倍空间）。
+
+```yaml
+source_dirs: [/data/downloads]
+library_dir: /data/media
+```
+
+**② 跨容器路径一致**：下载器（qBittorrent 等）通常是另一个容器。让它用**与 MediaMaid 完全相同**的宿主→容器映射（也挂 `/srv/media → /data`），下载保存到 `/data/downloads`。这样：
+- 文件直接落进被监控的源目录 → watcher 自动整理；
+- 下载器上报的路径 == MediaMaid 视角路径 → **无需任何转换**。
+
+**③ 兜底：路径映射**：实在无法对齐（如沿用旧 qB 的 `/downloads`），给 qBittorrent 下载器配 `path_mappings`，把远端前缀翻译成本地前缀。**仅** `poll_completed`（轮询已完成任务）模式需要；watcher 模式只要文件落进源目录即可。
+
+```yaml
+plugins:
+  downloader:
+    - name: qbittorrent
+      config:
+        path_mappings: ["/downloads:/data/downloads"]   # 远端前缀:本地前缀
+```
+
+> Web「配置」页的目录字段可点「浏览」选择，无需手敲。
 
 **systemd**（见 `deploy/mediamaid.service`，按需改用户/路径）：
 

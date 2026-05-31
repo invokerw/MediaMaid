@@ -1,9 +1,11 @@
 import { Form, Input, InputNumber, Switch, Typography } from "antd";
 import { JsonSchema } from "../api";
+import PathInput from "./PathInput";
 
 const { Text } = Typography;
 
 const isSecret = (key: string) => /key|password|secret|token/i.test(key);
+const isPath = (key: string) => /path|dir/i.test(key);
 
 /** 根据 JSON schema 的 properties 渲染一组 antd 表单项。
  *  name 为 [...prefix, key]，供嵌套（如 config.xxx）使用。 */
@@ -43,6 +45,8 @@ export default function SchemaFields({
           control = <InputNumber style={{ width: "100%" }} />;
         } else if (isSecret(key)) {
           control = <Input.Password placeholder={req ? "必填" : "可选"} />;
+        } else if (isPath(key)) {
+          control = <PathInput placeholder={req ? "必填" : "可选"} />;
         } else {
           control = <Input placeholder={req ? "必填" : "可选"} />;
         }

@@ -26,6 +26,9 @@ class QbittorrentConfig(BaseModel):
     # 提交时打的分类；可配合 qB「按分类设保存路径」使其落到源目录
     category: str = "mediamaid"
     save_path: Optional[str] = None
+    # 跨容器路径映射，每项 "远端前缀:本地前缀"（如 "/downloads:/data/downloads"）。
+    # 仅当下载器上报路径与 MediaMaid 视角不一致时需要（poll_completed 模式）。
+    path_mappings: list[str] = []
 
 
 @register
@@ -36,6 +39,21 @@ class QbittorrentDownloader(Downloader):
     def __init__(self, config: QbittorrentConfig):
         super().__init__(config)
         self._client = None
+        # 解析为 [(远端前缀, 本地前缀)]，按远端前缀长度降序（最长匹配优先）
+        self._maps = []
+        for m in config.path_mappings:
+            if ":" in m:
+                remote, local = m.split(":", 1)
+                if remote and local:
+                    self._maps.append((remote.rstrip("/"), local.rstrip("/")))
+        self._maps.sort(key=lambda x: len(x[0]), reverse=True)
+
+    def _map_path(self, p: str) -> str:
+        """把下载器上报的远端路径转换为 MediaMaid 本地路径。"""
+        for remote, local in self._maps:
+            if p == remote or p.startswith(remote + "/"):
+                return local + p[len(remote):]
+        return p
 
     def _conn(self):
         if self._client is not None:
@@ -95,7 +113,7 @@ class QbittorrentDownloader(Downloader):
         paths: List[Path] = []
         try:
             for t in client.torrents_info(category=cfg.category, status_filter="completed"):
-                paths.append(Path(t.content_path))
+                paths.append(Path(self._map_path(str(t.content_path))))
         except Exception as e:  # noqa: BLE001
             log.error("查询完成任务失败: %s", e)
         return paths

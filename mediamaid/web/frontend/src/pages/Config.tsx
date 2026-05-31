@@ -12,7 +12,10 @@ import {
   Typography,
   message,
 } from "antd";
+import { FolderOpenOutlined } from "@ant-design/icons";
 import { api, Settings } from "../api";
+import PathInput from "../components/PathInput";
+import DirPicker from "../components/DirPicker";
 
 const { Paragraph } = Typography;
 
@@ -20,6 +23,7 @@ export default function Config() {
   const [form] = Form.useForm();
   const [saving, setSaving] = useState(false);
   const [raw, setRaw] = useState<{ path: string; text: string } | null>(null);
+  const [pickSrc, setPickSrc] = useState(false);
 
   const loadRaw = () => api.config().then(setRaw).catch(() => {});
 
@@ -54,15 +58,32 @@ export default function Config() {
       <Card size="small" title="路径">
         <Form.Item
           name="source_dirs"
-          label="源目录（可多个，回车分隔）"
+          label="源目录（可多个）"
           rules={[{ required: true, message: "至少一个源目录" }]}
         >
-          {tags("/data/downloads")}
+          {tags("回车输入或点下方按钮选择")}
         </Form.Item>
+        <Button
+          size="small"
+          icon={<FolderOpenOutlined />}
+          onClick={() => setPickSrc(true)}
+          style={{ marginBottom: 16 }}
+        >
+          添加目录
+        </Button>
         <Form.Item name="library_dir" label="媒体库根目录" rules={[{ required: true }]}>
-          <Input placeholder="/data/media" />
+          <PathInput placeholder="/data/media" />
         </Form.Item>
       </Card>
+
+      <DirPicker
+        open={pickSrc}
+        onClose={() => setPickSrc(false)}
+        onSelect={(p) => {
+          const cur: string[] = form.getFieldValue("source_dirs") || [];
+          if (!cur.includes(p)) form.setFieldValue("source_dirs", [...cur, p]);
+        }}
+      />
 
       <Card size="small" title="落地" style={{ marginTop: 16 }}>
         <Form.Item name="action" label="落地方式">

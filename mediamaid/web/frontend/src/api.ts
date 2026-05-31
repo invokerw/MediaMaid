@@ -147,6 +147,10 @@ export const api = {
     }),
   settings: () => get<Settings>("/api/settings"),
   updateSettings: (body: Partial<Settings>) => put<Settings>("/api/settings", body),
+  fsList: (path?: string) =>
+    get<{ path: string; parent: string; dirs: { name: string; path: string }[]; error: string | null }>(
+      "/api/fs" + (path ? `?path=${encodeURIComponent(path)}` : "")
+    ),
   subscriberTypes: () => get<{ subscribers: SubscriberType[] }>("/api/subscribers"),
   subscriptions: () => get<{ subscriptions: SubscriptionRow[] }>("/api/subscriptions"),
   createSubscription: (body: {
