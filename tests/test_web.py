@@ -117,6 +117,61 @@ def test_fs_list_bad_path(client):
     assert r.json()["error"]
 
 
+def test_files_roots_and_list(client, tmp_path):
+    c, _ = client
+    src = tmp_path / "downloads"
+    (src / "a.mkv").write_bytes(b"x")
+    (src / "sub").mkdir()
+
+    roots = c.get("/api/files/roots").json()["roots"]
+    assert any("源目录" in r["label"] for r in roots)
+    assert any("媒体库" in r["label"] for r in roots)
+
+    entries = c.get("/api/files", params={"path": str(src)}).json()["entries"]
+    by_name = {e["name"]: e for e in entries}
+    assert by_name["a.mkv"]["is_dir"] is False
+    assert by_name["sub"]["is_dir"] is True
+
+
+def test_files_rename_and_delete(client, tmp_path):
+    c, _ = client
+    src = tmp_path / "downloads"
+    f = src / "old.mkv"
+    f.write_bytes(b"x")
+
+    # 重命名
+    r = c.post("/api/files/rename", json={"path": str(f), "name": "new.mkv"})
+    assert r.status_code == 200
+    assert (src / "new.mkv").exists() and not f.exists()
+
+    # 删除文件
+    assert c.post("/api/files/delete", json={"path": str(src / "new.mkv")}).status_code == 200
+    assert not (src / "new.mkv").exists()
+
+    # 删除目录(递归)
+    d = src / "folder"
+    (d / "inner.mkv").parent.mkdir()
+    (d / "inner.mkv").write_bytes(b"x")
+    assert c.post("/api/files/delete", json={"path": str(d)}).status_code == 200
+    assert not d.exists()
+
+
+def test_files_security(client, tmp_path):
+    c, _ = client
+    src = tmp_path / "downloads"
+    # 越界路径 → 403
+    assert c.get("/api/files", params={"path": "/etc"}).status_code == 403
+    assert c.post("/api/files/delete", json={"path": "/etc/hosts"}).status_code == 403
+    # 删受管根本身 → 403
+    assert c.post("/api/files/delete", json={"path": str(src)}).status_code == 403
+    # 非法新名 → 400
+    f = src / "x.mkv"
+    f.write_bytes(b"x")
+    assert c.post(
+        "/api/files/rename", json={"path": str(f), "name": "../escape"}
+    ).status_code == 400
+
+
 def test_diag_hardlink(client):
     c, tmp_path = client
     # client fixture 的 source_dir 与 library 同在 tmp_path 下 → 同一文件系统

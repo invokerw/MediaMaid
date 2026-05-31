@@ -147,6 +147,16 @@ export const api = {
     }),
   settings: () => get<Settings>("/api/settings"),
   updateSettings: (body: Partial<Settings>) => put<Settings>("/api/settings", body),
+  filesRoots: () => get<{ roots: { label: string; path: string }[] }>("/api/files/roots"),
+  filesList: (path: string) =>
+    get<{
+      path: string;
+      parent: string;
+      entries: { name: string; path: string; is_dir: boolean; size: number; mtime: number }[];
+    }>(`/api/files?path=${encodeURIComponent(path)}`),
+  filesDelete: (path: string) => post<{ ok: boolean }>("/api/files/delete", { path }),
+  filesRename: (path: string, name: string) =>
+    post<{ ok: boolean; path: string }>("/api/files/rename", { path, name }),
   diagHardlink: () =>
     get<{
       action: string;

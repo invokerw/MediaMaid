@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import errno
 import os
+import shutil
 import uuid
 from pathlib import Path
 from typing import List, Optional
@@ -87,6 +88,15 @@ class SubscriptionUpdate(BaseModel):
     subscriber: Optional[str] = None
     enabled: Optional[bool] = None
     config: Optional[dict] = None
+
+
+class DeleteBody(BaseModel):
+    path: str
+
+
+class RenameBody(BaseModel):
+    path: str
+    name: str
 
 
 class FiltersBody(BaseModel):
@@ -310,6 +320,95 @@ def create_app(config_path: Path) -> FastAPI:
                             pass
             results.append(entry)
         return {"action": config.action.value, "results": results}
+
+    # ---- 文件管理（仅限受管根：源目录 + 媒体库）----
+    def _roots() -> List[Path]:
+        config = cfg()
+        roots = list(config.source_dirs) + [config.library_dir]
+        out = []
+        for r in roots:
+            try:
+                out.append(Path(r).resolve())
+            except OSError:
+                continue
+        return out
+
+    def _is_within(child: Path, parent: Path) -> bool:
+        try:
+            child.relative_to(parent)
+            return True
+        except ValueError:
+            return False
+
+    def _safe(path_str: str, *, allow_root: bool = True) -> Path:
+        """解析路径并确保位于某个受管根内；allow_root=False 时禁止恰好是根。"""
+        p = Path(path_str).resolve()
+        roots = _roots()
+        inside = any(p == r or _is_within(p, r) for r in roots)
+        if not inside:
+            raise HTTPException(403, "路径超出受管目录（源目录/媒体库）范围")
+        if not allow_root and any(p == r for r in roots):
+            raise HTTPException(403, "不允许操作受管根目录本身")
+        return p
+
+    @app.get("/api/files/roots")
+    def api_files_roots():
+        config = cfg()
+        roots = [{"label": f"源目录: {s}", "path": str(Path(s).resolve())}
+                 for s in config.source_dirs]
+        roots.append({"label": f"媒体库: {config.library_dir}",
+                      "path": str(Path(config.library_dir).resolve())})
+        return {"roots": roots}
+
+    @app.get("/api/files")
+    def api_files_list(path: str):
+        base = _safe(path)
+        if not base.is_dir():
+            raise HTTPException(400, "不是目录")
+        entries = []
+        for child in sorted(base.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower())):
+            try:
+                st = child.stat()
+                entries.append({
+                    "name": child.name,
+                    "path": str(child),
+                    "is_dir": child.is_dir(),
+                    "size": st.st_size,
+                    "mtime": st.st_mtime,
+                })
+            except OSError:
+                continue
+        return {"path": str(base), "parent": str(base.parent), "entries": entries}
+
+    @app.post("/api/files/delete")
+    def api_files_delete(body: DeleteBody):
+        p = _safe(body.path, allow_root=False)
+        if not p.exists():
+            raise HTTPException(404, "文件不存在")
+        try:
+            if p.is_dir():
+                shutil.rmtree(p)
+            else:
+                p.unlink()
+        except OSError as e:
+            raise HTTPException(500, f"删除失败: {e}")
+        return {"ok": True}
+
+    @app.post("/api/files/rename")
+    def api_files_rename(body: RenameBody):
+        p = _safe(body.path, allow_root=False)
+        if "/" in body.name or "\\" in body.name or body.name in ("", ".", ".."):
+            raise HTTPException(400, "非法的新名称")
+        if not p.exists():
+            raise HTTPException(404, "文件不存在")
+        new = _safe(str(p.parent / body.name))
+        if new.exists():
+            raise HTTPException(409, "目标已存在")
+        try:
+            os.replace(p, new)
+        except OSError as e:
+            raise HTTPException(500, f"重命名失败: {e}")
+        return {"ok": True, "path": str(new)}
 
     @app.get("/api/settings")
     def api_settings_get():

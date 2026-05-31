@@ -7,18 +7,21 @@ import {
   ApiOutlined,
   SettingOutlined,
   CloudDownloadOutlined,
+  FolderOpenOutlined,
 } from "@ant-design/icons";
 import Dashboard from "./pages/Dashboard";
 import Records from "./pages/Records";
 import Plugins from "./pages/Plugins";
 import Config from "./pages/Config";
 import Subscriptions from "./pages/Subscriptions";
+import Files from "./pages/Files";
 
 const { Header, Content, Sider } = Layout;
 
 const items = [
   { key: "/", icon: <DashboardOutlined />, label: "仪表盘" },
   { key: "/subscriptions", icon: <CloudDownloadOutlined />, label: "订阅" },
+  { key: "/files", icon: <FolderOpenOutlined />, label: "文件" },
   { key: "/records", icon: <UnorderedListOutlined />, label: "记录" },
   { key: "/plugins", icon: <ApiOutlined />, label: "插件" },
   { key: "/config", icon: <SettingOutlined />, label: "配置" },
@@ -27,6 +30,7 @@ const items = [
 const TITLES: Record<string, string> = {
   "/": "仪表盘",
   "/subscriptions": "订阅资源",
+  "/files": "文件管理",
   "/records": "处理记录",
   "/plugins": "插件",
   "/config": "配置",
@@ -60,6 +64,7 @@ export default function App() {
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/subscriptions" element={<Subscriptions />} />
+              <Route path="/files" element={<Files />} />
               <Route path="/records" element={<Records />} />
               <Route path="/plugins" element={<Plugins />} />
               <Route path="/config" element={<Config />} />
