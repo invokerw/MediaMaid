@@ -307,6 +307,37 @@ def _make_feed(tmp_path):
     return feed
 
 
+def test_parser_types_and_crud_and_test(client):
+    c, _ = client
+    # 类型含 regex/guessit
+    types = {t["name"] for t in c.get("/api/parsers/types").json()["parsers"]}
+    assert {"regex", "guessit"} <= types
+
+    # 缺 pattern → 422
+    assert c.post(
+        "/api/parsers", json={"name": "x", "parser": "regex", "config": {}}
+    ).status_code == 422
+
+    # 添加正则解析器（字幕组遮天）
+    pat = r"\]\[(?P<title>[^\]]*遮天[^\]]*)\]"
+    pid = c.post(
+        "/api/parsers",
+        json={"name": "遮天", "parser": "regex", "config": {"pattern": pat, "type": "episode"}},
+    ).json()["id"]
+    assert any(p["id"] == pid for p in c.get("/api/parsers").json()["parsers"])
+
+    # 解析测试：字幕组命名能解析出标题
+    r = c.post(
+        "/api/parse/test",
+        json={"name": "[GM-Team][国漫][遮天][Shrouding the Heavens][2023][162].mkv"},
+    ).json()
+    assert r["matched"] == "regex"
+    assert r["title"] == "遮天"
+
+    # 删除
+    assert c.delete(f"/api/parsers/{pid}").status_code == 200
+
+
 def test_subscribers_types_have_schema(client):
     c, _ = client
     r = c.get("/api/subscribers")

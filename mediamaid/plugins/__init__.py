@@ -8,6 +8,7 @@ from .base import (
     Downloader,
     EmptyConfig,
     Notifier,
+    Parser,
     Plugin,
     Scraper,
     Subscriber,
@@ -16,6 +17,7 @@ from .registry import available, create, get, load_plugins, register
 
 __all__ = [
     "Plugin",
+    "Parser",
     "Scraper",
     "Subscriber",
     "Downloader",

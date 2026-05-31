@@ -69,25 +69,25 @@ def _load(path: Path):
     return yaml, {}
 
 
-def add_subscription(path: Path, sub: dict) -> None:
-    """向 subscriptions 列表追加一条订阅。"""
+def add_list_item(path: Path, key: str, item: dict) -> None:
+    """向顶层 key 的列表追加一项（保留注释）。"""
     path = Path(path)
     yaml, data = _load(path)
-    subs = data.get("subscriptions")
-    if subs is None:
-        subs = []
-        data["subscriptions"] = subs
-    subs.append(sub)
+    lst = data.get(key)
+    if lst is None:
+        lst = []
+        data[key] = lst
+    lst.append(item)
     with path.open("w", encoding="utf-8") as f:
         yaml.dump(data, f)
 
 
-def update_subscription(path: Path, sub_id: str, fields: dict) -> bool:
-    """按 id 更新订阅；返回是否命中。"""
+def update_list_item(path: Path, key: str, item_id: str, fields: dict) -> bool:
+    """按 id 更新顶层 key 列表中的一项；返回是否命中。"""
     path = Path(path)
     yaml, data = _load(path)
-    for s in data.get("subscriptions", []):
-        if s.get("id") == sub_id:
+    for s in data.get(key, []):
+        if s.get("id") == item_id:
             for k, v in fields.items():
                 s[k] = v
             with path.open("w", encoding="utf-8") as f:
@@ -96,17 +96,30 @@ def update_subscription(path: Path, sub_id: str, fields: dict) -> bool:
     return False
 
 
-def delete_subscription(path: Path, sub_id: str) -> bool:
+def delete_list_item(path: Path, key: str, item_id: str) -> bool:
     path = Path(path)
     yaml, data = _load(path)
-    subs = data.get("subscriptions", [])
-    new = [s for s in subs if s.get("id") != sub_id]
-    if len(new) == len(subs):
+    lst = data.get(key, [])
+    new = [s for s in lst if s.get("id") != item_id]
+    if len(new) == len(lst):
         return False
-    data["subscriptions"] = new
+    data[key] = new
     with path.open("w", encoding="utf-8") as f:
         yaml.dump(data, f)
     return True
+
+
+# 订阅 CRUD（向后兼容包装）
+def add_subscription(path: Path, sub: dict) -> None:
+    add_list_item(path, "subscriptions", sub)
+
+
+def update_subscription(path: Path, sub_id: str, fields: dict) -> bool:
+    return update_list_item(path, "subscriptions", sub_id, fields)
+
+
+def delete_subscription(path: Path, sub_id: str) -> bool:
+    return delete_list_item(path, "subscriptions", sub_id)
 
 
 # 嵌套对象类键，做 mapping 级合并而非整体替换

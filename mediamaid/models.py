@@ -68,6 +68,18 @@ class TransferPlan:
 
 
 @dataclass
+class ParseResult:
+    """解析器从文件名提取出的结构化信息。"""
+
+    type: MediaType
+    title: str
+    year: Optional[int] = None
+    season: Optional[int] = None
+    episode: Optional[int] = None
+    raw: dict = field(default_factory=dict)
+
+
+@dataclass
 class Release:
     """订阅器(Subscriber)发现的一个可下载资源，交给下载器(Downloader)。"""
 

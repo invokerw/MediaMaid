@@ -12,7 +12,7 @@ from typing import List, Optional, Tuple, Type
 
 from pydantic import BaseModel
 
-from ..models import Event, MediaInfo, MediaItem, Release
+from ..models import Event, MediaInfo, MediaItem, ParseResult, Release
 
 
 class EmptyConfig(BaseModel):
@@ -40,6 +40,17 @@ class Plugin(ABC):
 
     def __repr__(self) -> str:  # pragma: no cover - 便于调试
         return f"<{self.category}:{self.name}>"
+
+
+class Parser(Plugin):
+    """解析器：从文件名提取结构化信息（标题/季/集/年）。"""
+
+    category = "parser"
+
+    @abstractmethod
+    def parse(self, name: str) -> Optional[ParseResult]:
+        """解析文件名；无法解析返回 None（交给链中下一个解析器）。"""
+        raise NotImplementedError
 
 
 class Scraper(Plugin):
@@ -97,6 +108,7 @@ class Notifier(Plugin):
 
 # 类别名 -> 基类，供 registry 校验插件归属
 CATEGORIES = {
+    Parser.category: Parser,
     Scraper.category: Scraper,
     Subscriber.category: Subscriber,
     Downloader.category: Downloader,

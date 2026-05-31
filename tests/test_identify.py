@@ -1,10 +1,12 @@
-from mediamaid.config import FilterConfig
+from pathlib import Path
+
+from mediamaid.config import Config
 from mediamaid.identify import Identifier
 from mediamaid.models import MediaType
 
 
 def make_identifier():
-    return Identifier(FilterConfig())
+    return Identifier(Config(source_dirs=[Path("/tmp")], library_dir=Path("/tmp/lib")))
 
 
 def test_identify_movie():

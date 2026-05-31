@@ -89,6 +89,23 @@ export interface SubscriberType {
   schema: JsonSchema;
 }
 
+export interface ParserRow {
+  id: string;
+  name: string;
+  parser: string;
+  enabled: boolean;
+  config: Record<string, unknown>;
+}
+
+export interface ParseTestResult {
+  matched: string | null;
+  type?: string;
+  title?: string;
+  year?: number | null;
+  season?: number | null;
+  episode?: number | null;
+}
+
 export interface SubscriptionRow {
   id: string;
   name: string;
@@ -169,6 +186,18 @@ export const api = {
     get<{ path: string; parent: string; dirs: { name: string; path: string }[]; error: string | null }>(
       "/api/fs" + (path ? `?path=${encodeURIComponent(path)}` : "")
     ),
+  parserTypes: () => get<{ parsers: SubscriberType[] }>("/api/parsers/types"),
+  parsers: () => get<{ parsers: ParserRow[] }>("/api/parsers"),
+  createParser: (body: {
+    name: string;
+    parser: string;
+    enabled: boolean;
+    config: Record<string, unknown>;
+  }) => post<ParserRow>("/api/parsers", body),
+  updateParser: (id: string, body: Partial<ParserRow>) =>
+    put<ParserRow>(`/api/parsers/${id}`, body),
+  deleteParser: (id: string) => send<{ ok: boolean }>("DELETE", `/api/parsers/${id}`),
+  parseTest: (name: string) => post<ParseTestResult>("/api/parse/test", { name }),
   subscriberTypes: () => get<{ subscribers: SubscriberType[] }>("/api/subscribers"),
   subscriptions: () => get<{ subscriptions: SubscriptionRow[] }>("/api/subscriptions"),
   createSubscription: (body: {

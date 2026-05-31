@@ -59,7 +59,7 @@ class Pipeline:
     def reload(self, config: Config) -> None:
         """用新配置重建标识器/刮削器/通知器/整理器（热重载用，store 不变）。"""
         self.config = config
-        self.identifier = Identifier(config.filters)
+        self.identifier = Identifier(config)
         self.scrapers = build_scrapers(config)
         self.notifiers = build_notifiers(config)
         self.organizer = Organizer(config)

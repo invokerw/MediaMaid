@@ -22,6 +22,7 @@ from starlette.concurrency import run_in_threadpool
 
 from . import cfgio
 from ..config import Config, ConfigManager
+from ..identify import Identifier
 from ..logging_conf import get_logger
 from ..models import Release
 from ..pipeline import Pipeline
@@ -88,6 +89,24 @@ class SubscriptionUpdate(BaseModel):
     subscriber: Optional[str] = None
     enabled: Optional[bool] = None
     config: Optional[dict] = None
+
+
+class ParserBody(BaseModel):
+    name: str
+    parser: str
+    enabled: bool = True
+    config: dict = {}
+
+
+class ParserUpdate(BaseModel):
+    name: Optional[str] = None
+    parser: Optional[str] = None
+    enabled: Optional[bool] = None
+    config: Optional[dict] = None
+
+
+class ParseTestBody(BaseModel):
+    name: str
 
 
 class DeleteBody(BaseModel):
@@ -502,6 +521,89 @@ def create_app(config_path: Path) -> FastAPI:
             cls = get_plugin("subscriber", name)
             out.append({"name": name, "schema": cls.ConfigModel.model_json_schema()})
         return {"subscribers": out}
+
+    # ---- 解析器（链式，按序尝试）----
+    def _parser_dict(p) -> dict:
+        return {
+            "id": p.id,
+            "name": p.name,
+            "parser": p.parser,
+            "enabled": p.enabled,
+            "config": dict(p.config),
+        }
+
+    def _find_parser(pid: str):
+        p = next((x for x in cfg().parsers if x.id == pid), None)
+        if p is None:
+            raise HTTPException(404, f"解析器不存在: {pid}")
+        return p
+
+    @app.get("/api/parsers/types")
+    def api_parser_types():
+        out = []
+        for name in available("parser"):
+            cls = get_plugin("parser", name)
+            out.append({"name": name, "schema": cls.ConfigModel.model_json_schema()})
+        return {"parsers": out}
+
+    @app.get("/api/parsers")
+    def api_parsers():
+        return {"parsers": [_parser_dict(p) for p in cfg().parsers]}
+
+    @app.post("/api/parsers")
+    def api_parser_create(body: ParserBody):
+        try:
+            cls = get_plugin("parser", body.parser)
+        except KeyError:
+            raise HTTPException(404, f"未知解析器: {body.parser}")
+        try:
+            cls.ConfigModel.model_validate(body.config)
+        except ValidationError as e:
+            raise HTTPException(422, e.errors())
+        pid = uuid.uuid4().hex[:8]
+        cfgio.add_list_item(config_path, "parsers", {
+            "id": pid, "name": body.name, "parser": body.parser,
+            "enabled": body.enabled, "config": body.config,
+        })
+        manager.reload()
+        return _parser_dict(_find_parser(pid))
+
+    @app.put("/api/parsers/{pid}")
+    def api_parser_update(pid: str, body: ParserUpdate):
+        p = _find_parser(pid)
+        parser = body.parser or p.parser
+        config = body.config if body.config is not None else p.config
+        try:
+            cls = get_plugin("parser", parser)
+            cls.ConfigModel.model_validate(config)
+        except KeyError:
+            raise HTTPException(404, f"未知解析器: {parser}")
+        except ValidationError as e:
+            raise HTTPException(422, e.errors())
+        cfgio.update_list_item(config_path, "parsers", pid, body.model_dump(exclude_none=True))
+        manager.reload()
+        return _parser_dict(_find_parser(pid))
+
+    @app.delete("/api/parsers/{pid}")
+    def api_parser_delete(pid: str):
+        _find_parser(pid)
+        cfgio.delete_list_item(config_path, "parsers", pid)
+        manager.reload()
+        return {"ok": True}
+
+    @app.post("/api/parse/test")
+    def api_parse_test(body: ParseTestBody):
+        res, matched = Identifier(cfg()).parse_name(body.name)
+        if res is None:
+            return {"matched": None}
+        return {
+            "matched": matched,
+            "type": res.type.value,
+            "title": res.title,
+            "year": res.year,
+            "season": res.season,
+            "episode": res.episode,
+        }
 
     @app.get("/api/subscriptions")
     def api_subscriptions():

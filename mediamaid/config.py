@@ -62,6 +62,16 @@ class Subscription(BaseModel):
     config: Dict = Field(default_factory=dict)
 
 
+class ParserSpec(BaseModel):
+    """一条命名解析器：选定某解析器类型并提供其参数。链中按序尝试。"""
+
+    id: str
+    name: str
+    parser: str  # 解析器类型名，如 "regex" / "guessit"
+    enabled: bool = True
+    config: Dict = Field(default_factory=dict)
+
+
 class Config(BaseModel):
     # 监控/扫描的源目录（可多个）
     source_dirs: List[Path]
@@ -101,12 +111,18 @@ class Config(BaseModel):
     # 订阅条目：每条选一个订阅器类型 + 参数（取代 plugins.subscriber 的运行角色）
     subscriptions: List[Subscription] = Field(default_factory=list)
 
+    # 解析器链：按序尝试，首个解析出标题者胜出；为空时回退内置 guessit
+    parsers: List[ParserSpec] = Field(default_factory=list)
+
     def plugin_specs(self, category: str) -> List[PluginSpec]:
         """返回某类别下 enabled 的插件实例配置。"""
         return [s for s in self.plugins.get(category, []) if s.enabled]
 
     def enabled_subscriptions(self) -> List[Subscription]:
         return [s for s in self.subscriptions if s.enabled]
+
+    def enabled_parsers(self) -> List[ParserSpec]:
+        return [p for p in self.parsers if p.enabled]
 
 
 def load_config(path: Path) -> Config:

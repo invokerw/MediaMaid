@@ -1,24 +1,43 @@
-"""识别：遍历源目录，用 guessit 解析文件名为 MediaItem。"""
+"""识别：遍历源目录，用解析器链把文件名解析为 MediaItem。
+
+解析器是插件（plugins/parser）。识别链按 config.parsers 顺序尝试，首个解析出
+标题者胜出；链为空时回退内置 guessit，保持现有行为。
+"""
 
 from __future__ import annotations
 
 from pathlib import Path
 from typing import Iterator, List, Optional
 
-from guessit import guessit
-
-from .config import FilterConfig
+from .config import Config, FilterConfig
 from .logging_conf import get_logger
 from .models import MediaItem, MediaType
+from .plugins import Parser, create, load_plugins
 
 log = get_logger(__name__)
 
 
+def build_parsers(config: Config) -> List[Parser]:
+    """按 config.parsers 顺序构建解析器链；为空则回退内置 guessit。"""
+    load_plugins()
+    chain: List[Parser] = []
+    for spec in config.enabled_parsers():
+        try:
+            chain.append(create("parser", spec.parser, spec.config))
+        except Exception as e:  # noqa: BLE001
+            log.error("加载解析器 %s(%s) 失败: %s", spec.name, spec.parser, e)
+    if not chain:
+        chain.append(create("parser", "guessit"))
+    return chain
+
+
 class Identifier:
-    def __init__(self, filters: FilterConfig):
-        self.filters = filters
-        self._exts = {e.lower().lstrip(".") for e in filters.video_extensions}
-        self._exclude = [k.lower() for k in filters.exclude_keywords]
+    def __init__(self, config: Config):
+        self.config = config
+        self.filters: FilterConfig = config.filters
+        self._exts = {e.lower().lstrip(".") for e in self.filters.video_extensions}
+        self._exclude = [k.lower() for k in self.filters.exclude_keywords]
+        self.parsers = build_parsers(config)
 
     def accept_file(self, path: Path) -> bool:
         """是否为候选媒体文件。"""
@@ -39,41 +58,32 @@ class Identifier:
             return False
         return True
 
+    def parse_name(self, name: str):
+        """对文件名跑解析器链，返回 (ParseResult, 命中的解析器名)；都不中→(None, None)。"""
+        for parser in self.parsers:
+            try:
+                res = parser.parse(name)
+            except Exception as e:  # noqa: BLE001
+                log.warning("解析器 %s 异常 %s: %s", parser.name, name, e)
+                continue
+            if res is not None and res.title:
+                return res, parser.name
+        return None, None
+
     def identify(self, path: Path) -> Optional[MediaItem]:
         """解析单个文件，返回 MediaItem；无法识别返回 None。"""
-        guess = dict(guessit(str(path.name)))
-        gtype = guess.get("type")
-        if gtype == "movie":
-            media_type = MediaType.MOVIE
-        elif gtype == "episode":
-            media_type = MediaType.EPISODE
-        else:
-            media_type = MediaType.UNKNOWN
-
-        title = guess.get("title")
-        if not title:
-            log.warning("无法解析标题: %s", path.name)
+        res, _ = self.parse_name(path.name)
+        if res is None:
+            log.warning("无法解析: %s", path.name)
             return None
-
-        season = guess.get("season")
-        episode = guess.get("episode")
-        # guessit 可能把多集解析成 list，取第一集
-        if isinstance(episode, list):
-            episode = episode[0] if episode else None
-        if isinstance(season, list):
-            season = season[0] if season else None
-        # 有集号但无季号时默认第 1 季
-        if media_type == MediaType.EPISODE and season is None and episode is not None:
-            season = 1
-
         return MediaItem(
             source=path,
-            media_type=media_type,
-            title=str(title),
-            year=guess.get("year"),
-            season=season,
-            episode=episode,
-            raw=guess,
+            media_type=res.type,
+            title=res.title,
+            year=res.year,
+            season=res.season,
+            episode=res.episode,
+            raw=res.raw,
         )
 
     def identify_path_name(self, name: str) -> Optional[MediaItem]:
