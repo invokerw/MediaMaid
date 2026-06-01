@@ -93,6 +93,9 @@ class Config(BaseModel):
     poll_interval: int = 300
     # 状态库路径
     state_db: Path = Path("mediamaid.db")
+    # 全量扫描并发度：>1 时用线程池并行处理（瓶颈在 TMDB 网络请求）。
+    # 注意 TMDB 速率限制，不宜过大。
+    scan_workers: int = 4
 
     # 后处理选项（非某个插件专属）
     write_nfo: bool = False

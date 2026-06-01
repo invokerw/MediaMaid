@@ -27,6 +27,9 @@ poll_interval: 300        # 下载完成轮询间隔（秒）
 # 状态库路径（SQLite）
 state_db: mediamaid.db
 
+# 全量扫描并发度：>1 时并行处理（瓶颈在 TMDB 网络请求）。注意 TMDB 速率限制。
+scan_workers: 4
+
 filters:
   video_extensions: [mkv, mp4, avi, ts, m2ts, mov, wmv, flv, iso]
   min_size_mb: 50
@@ -60,6 +63,9 @@ plugins:
         api_key: ""
         language: zh-CN
         min_confidence: 0.5
+        # 搜索结果进程内缓存（可选）：容量上限与存活秒数
+        # cache_max: 512
+        # cache_ttl: 3600
   notifier:
     - name: log          # 写日志，零依赖
     # - name: webhook

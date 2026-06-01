@@ -12,7 +12,7 @@ from typing import List, Optional, Tuple
 from .config import Config, Subscription
 from .logging_conf import get_logger
 from .models import Event, Release
-from .plugins import Downloader, Subscriber, create, load_plugins
+from .plugins import Downloader, Subscriber, close_plugins, create, load_plugins
 from .store import StateStore
 
 log = get_logger(__name__)
@@ -51,6 +51,9 @@ class SubscribeRunner:
 
     def reload(self, config: Config) -> None:
         """用新配置重建订阅/下载器（热重载用）。"""
+        # 先关闭旧实例，避免下载器会话/连接泄漏
+        close_plugins(s for _, s in getattr(self, "subs", []))
+        close_plugins(getattr(self, "downloaders", None))
         self.config = config
         self.subs = build_subscriptions(config)
         self.downloaders = build_downloaders(config)

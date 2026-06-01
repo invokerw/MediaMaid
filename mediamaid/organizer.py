@@ -17,15 +17,9 @@ class Organizer:
     def __init__(self, config: Config):
         self.config = config
 
-    def _category(self, item: MediaItem) -> str:
-        """按 anime_keywords 命中源路径则归为动漫，否则普通剧集。"""
-        src = str(item.source).lower()
-        if any(k.lower() in src for k in self.config.anime_keywords if k):
-            return "anime"
-        return "tv"
-
     def plan(self, item: MediaItem, info: Optional[MediaInfo]) -> TransferPlan:
-        rel = naming.render_dest(item, info, self.config.naming, self._category(item))
+        # 分类（tv/anime）在识别阶段已定，落地直接消费
+        rel = naming.render_dest(item, info, self.config.naming, item.category)
         dest = self.config.library_dir / rel
         return TransferPlan(
             item=item,

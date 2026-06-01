@@ -13,7 +13,7 @@ from .base import (
     Scraper,
     Subscriber,
 )
-from .registry import available, create, get, load_plugins, register
+from .registry import available, close_plugins, create, get, load_plugins, register
 
 __all__ = [
     "Plugin",
@@ -29,4 +29,5 @@ __all__ = [
     "get",
     "available",
     "load_plugins",
+    "close_plugins",
 ]

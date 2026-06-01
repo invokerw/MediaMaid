@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import threading
+import time
+from collections import OrderedDict
 from typing import Optional
 
 import httpx
@@ -19,11 +22,47 @@ _BASE = "https://api.themoviedb.org/3"
 _IMG = "https://image.tmdb.org/t/p/original"
 
 
+class _TTLCache:
+    """容量上限 + TTL 的简易 LRU 缓存（线程安全）。
+
+    只缓存"成功的搜索"，瞬时失败不应进缓存。并行扫描时多线程共享同一刮削器
+    实例，故用锁保护。
+    """
+
+    def __init__(self, maxsize: int = 512, ttl: float = 3600.0):
+        self.maxsize = maxsize
+        self.ttl = ttl
+        self._data: "OrderedDict[tuple, tuple]" = OrderedDict()  # key -> (value, expire_at)
+        self._lock = threading.Lock()
+
+    def get(self, key):
+        with self._lock:
+            item = self._data.get(key)
+            if item is None:
+                return None
+            value, expire_at = item
+            if time.monotonic() >= expire_at:
+                self._data.pop(key, None)
+                return None
+            self._data.move_to_end(key)  # LRU 触达
+            return value
+
+    def set(self, key, value) -> None:
+        with self._lock:
+            self._data[key] = (value, time.monotonic() + self.ttl)
+            self._data.move_to_end(key)
+            while len(self._data) > self.maxsize:
+                self._data.popitem(last=False)  # 淘汰最久未用
+
+
 class TMDBConfig(BaseModel):
     api_key: str
     language: str = "zh-CN"
     min_confidence: float = 0.5
     timeout: float = 15.0
+    # 搜索结果进程内缓存：容量上限与存活秒数（避免无界增长 / 元数据永不刷新）
+    cache_max: int = 512
+    cache_ttl: float = 3600.0
 
 
 @register
@@ -34,12 +73,19 @@ class TMDBScraper(Scraper):
     def __init__(self, config: TMDBConfig):
         super().__init__(config)
         self.client = httpx.Client(timeout=config.timeout)
-        # 进程内缓存：避免同一剧集多集重复搜索
-        self._search_cache: dict = {}
+        # 进程内缓存：避免同一剧集多集重复搜索（有上限 + TTL）
+        self._search_cache = _TTLCache(maxsize=config.cache_max, ttl=config.cache_ttl)
 
     @property
     def min_confidence(self) -> float:
         return self.config.min_confidence
+
+    def close(self) -> None:
+        """释放底层 HTTP 连接（热重载替换旧实例时调用）。"""
+        try:
+            self.client.close()
+        except Exception:  # noqa: BLE001 - 关闭尽力而为
+            pass
 
     def _get(self, path: str, **params) -> Optional[dict]:
         params.setdefault("api_key", self.config.api_key)
@@ -51,6 +97,26 @@ class TMDBScraper(Scraper):
         except httpx.HTTPError as e:
             log.warning("TMDB 请求失败 %s: %s", path, e)
             return None
+
+    def _search(self, kind: str, item: MediaItem) -> Optional[list]:
+        """搜索 TMDB 并缓存。返回结果列表（可能为空表示"确无匹配"）；
+
+        返回 None 表示请求失败——失败不进缓存，下次仍会重试（避免瞬时失败投毒）。
+        """
+        key = (kind, item.title, item.year)
+        cached = self._search_cache.get(key)
+        if cached is not None:
+            return cached
+
+        params = {"query": item.title}
+        if item.year:
+            params["year" if kind == "movie" else "first_air_date_year"] = item.year
+        data = self._get(f"/search/{kind}", **params)
+        if data is None:
+            return None  # 瞬时失败：不缓存
+        results = data.get("results", [])
+        self._search_cache.set(key, results)  # 成功（含空结果）才缓存
+        return results
 
     def test(self):
         data = self._get("/configuration")
@@ -67,15 +133,7 @@ class TMDBScraper(Scraper):
 
     # ---- 电影 ----
     def _scrape_movie(self, item: MediaItem) -> Optional[MediaInfo]:
-        key = ("movie", item.title, item.year)
-        results = self._search_cache.get(key)
-        if results is None:
-            params = {"query": item.title}
-            if item.year:
-                params["year"] = item.year
-            data = self._get("/search/movie", **params) or {}
-            results = data.get("results", [])
-            self._search_cache[key] = results
+        results = self._search("movie", item)
         if not results:
             return None
 
@@ -99,15 +157,7 @@ class TMDBScraper(Scraper):
 
     # ---- 剧集 ----
     def _scrape_episode(self, item: MediaItem) -> Optional[MediaInfo]:
-        key = ("tv", item.title, item.year)
-        results = self._search_cache.get(key)
-        if results is None:
-            params = {"query": item.title}
-            if item.year:
-                params["first_air_date_year"] = item.year
-            data = self._get("/search/tv", **params) or {}
-            results = data.get("results", [])
-            self._search_cache[key] = results
+        results = self._search("tv", item)
         if not results:
             return None
 

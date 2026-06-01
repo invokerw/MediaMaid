@@ -30,6 +30,9 @@ class MediaItem:
     year: Optional[int] = None
     season: Optional[int] = None
     episode: Optional[int] = None
+    # 分类：剧集可为 "tv" / "anime"，决定落地到 TV/ 还是 Anime/ 目录。
+    # 在识别阶段判定（见 identify.py），落地阶段直接消费，避免分类规则与落地耦合。
+    category: str = "tv"
     # guessit 的原始解析结果，保留以备调试 / 进阶匹配
     raw: dict = field(default_factory=dict)
 

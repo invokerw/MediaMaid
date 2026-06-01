@@ -44,6 +44,7 @@ class Identifier:
         self.filters: FilterConfig = config.filters
         self._exts = {e.lower().lstrip(".") for e in self.filters.video_extensions}
         self._exclude = [k.lower() for k in self.filters.exclude_keywords]
+        self._anime_keywords = [k.lower() for k in config.anime_keywords if k]
         self.parsers = build_parsers(config)
 
     def accept_file(self, path: Path) -> bool:
@@ -77,6 +78,13 @@ class Identifier:
                 return res, parser.name
         return None, None
 
+    def _category(self, path: Path) -> str:
+        """按 anime_keywords 命中源路径(含目录)则归为动漫，否则普通剧集。"""
+        src = str(path).lower()
+        if any(k in src for k in self._anime_keywords):
+            return "anime"
+        return "tv"
+
     def identify(self, path: Path) -> Optional[MediaItem]:
         """解析单个文件，返回 MediaItem；无法识别返回 None。"""
         res, _ = self.parse_name(path.name)
@@ -90,6 +98,7 @@ class Identifier:
             year=res.year,
             season=res.season,
             episode=res.episode,
+            category=self._category(path),
             raw=res.raw,
         )
 

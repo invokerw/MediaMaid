@@ -59,6 +59,15 @@ def create(category: str, name: str, config: dict | None = None) -> Plugin:
     return cls(cfg)
 
 
+def close_plugins(plugins) -> None:
+    """逐个关闭插件实例，单个失败不影响其他（热重载替换前调用）。"""
+    for p in plugins or []:
+        try:
+            p.close()
+        except Exception as e:  # noqa: BLE001
+            log.warning("关闭插件 %s 失败: %s", getattr(p, "name", p), e)
+
+
 def load_plugins() -> None:
     """发现并注册所有插件（幂等）。"""
     global _loaded

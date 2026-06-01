@@ -38,6 +38,12 @@ class Plugin(ABC):
         """连接/可用性自检。基类默认无需测试；子类可覆写做实测。"""
         return True, "该插件无需连接测试"
 
+    def close(self) -> None:
+        """释放插件持有的资源（HTTP 连接等）。基类默认无操作；
+
+        持有连接的子类应覆写。热重载替换实例前会调用，避免连接/fd 泄漏。
+        """
+
     def __repr__(self) -> str:  # pragma: no cover - 便于调试
         return f"<{self.category}:{self.name}>"
 

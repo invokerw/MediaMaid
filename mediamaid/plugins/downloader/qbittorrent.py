@@ -75,6 +75,15 @@ class QbittorrentDownloader(Downloader):
         self._client = client
         return client
 
+    def close(self) -> None:
+        """登出并释放 qBittorrent 会话（热重载替换旧实例时调用）。"""
+        if self._client is not None:
+            try:
+                self._client.auth_log_out()
+            except Exception:  # noqa: BLE001 - 关闭尽力而为
+                pass
+            self._client = None
+
     def test(self):
         client = self._conn()
         if client is None:
