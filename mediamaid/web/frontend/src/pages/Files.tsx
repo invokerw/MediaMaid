@@ -21,6 +21,7 @@ import {
   DeleteOutlined,
 } from "@ant-design/icons";
 import { api } from "../api";
+import { ELLIPSIS, ellipsisCell } from "../components/EllipsisCell";
 
 const { Text } = Typography;
 
@@ -102,19 +103,21 @@ export default function Files() {
     {
       title: "名称",
       dataIndex: "name",
+      ellipsis: ELLIPSIS,
       render: (name, e) =>
-        e.is_dir ? (
-          <a onClick={() => browse(e.path)}>
-            <Space>
-              <FolderFilled style={{ color: "#e0b341" }} />
+        ellipsisCell(
+          name,
+          e.is_dir ? (
+            <a onClick={() => browse(e.path)}>
+              <FolderFilled style={{ color: "#e0b341", marginRight: 6 }} />
               {name}
-            </Space>
-          </a>
-        ) : (
-          <Space>
-            <FileOutlined />
-            {name}
-          </Space>
+            </a>
+          ) : (
+            <span>
+              <FileOutlined style={{ marginRight: 6 }} />
+              {name}
+            </span>
+          )
         ),
     },
     {

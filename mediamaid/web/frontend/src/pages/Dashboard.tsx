@@ -24,6 +24,7 @@ import {
 } from "@ant-design/icons";
 import { api, Dashboard as DashboardData, ScanResult } from "../api";
 import RecordsTable from "../components/RecordsTable";
+import { ELLIPSIS, ellipsisCell } from "../components/EllipsisCell";
 
 const STATUS_COLOR: Record<string, string> = {
   done: "success",
@@ -50,13 +51,13 @@ const scanColumns: ColumnsType<ScanItem> = [
     onFilter: (v, r) => r.status === v,
     render: (s: string) => <Tag color={STATUS_COLOR[s] || "default"}>{s}</Tag>,
   },
-  { title: "源文件", dataIndex: "source", ellipsis: true },
+  { title: "源文件", dataIndex: "source", ellipsis: ELLIPSIS, render: (v) => ellipsisCell(v) },
   {
     title: "目标",
     dataIndex: "dest",
-    ellipsis: true,
+    ellipsis: ELLIPSIS,
     render: (d: string | null) =>
-      d ? <span className="mono">{d}</span> : <span style={{ opacity: 0.5 }}>—</span>,
+      d ? ellipsisCell(d, <span className="mono">{d}</span>) : <span style={{ opacity: 0.5 }}>—</span>,
   },
 ];
 

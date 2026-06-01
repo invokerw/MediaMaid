@@ -1,6 +1,7 @@
 import { Table, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { RecordRow } from "../api";
+import { ELLIPSIS, ellipsisCell } from "./EllipsisCell";
 
 const STATUS_COLOR: Record<string, string> = {
   done: "success",
@@ -17,13 +18,8 @@ const columns: ColumnsType<RecordRow> = [
     render: (s: string) => <Tag color={STATUS_COLOR[s] || "default"}>{s}</Tag>,
   },
   { title: "动作", dataIndex: "action", width: 100, render: (a) => a || "-" },
-  { title: "源文件", dataIndex: "src_name", ellipsis: true },
-  {
-    title: "目标",
-    dataIndex: "dst_name",
-    ellipsis: true,
-    render: (d) => d || "-",
-  },
+  { title: "源文件", dataIndex: "src_name", ellipsis: ELLIPSIS, render: (v) => ellipsisCell(v) },
+  { title: "目标", dataIndex: "dst_name", ellipsis: ELLIPSIS, render: (v) => ellipsisCell(v) },
 ];
 
 export default function RecordsTable({

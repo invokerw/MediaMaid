@@ -28,6 +28,7 @@ import {
   SeenRelease,
 } from "../api";
 import SchemaFields from "../components/SchemaFields";
+import { ELLIPSIS, ellipsisCell } from "../components/EllipsisCell";
 
 const { Paragraph } = Typography;
 
@@ -120,9 +121,11 @@ export default function Subscriptions() {
     {
       title: "URL/参数",
       dataIndex: "config",
-      ellipsis: true,
-      render: (c: Record<string, unknown>) =>
-        <span className="mono">{String(c.url ?? Object.values(c)[0] ?? "")}</span>,
+      ellipsis: ELLIPSIS,
+      render: (c: Record<string, unknown>) => {
+        const s = String(c.url ?? Object.values(c)[0] ?? "");
+        return ellipsisCell(s, <span className="mono">{s}</span>);
+      },
     },
     { title: "已处理", dataIndex: "processed", width: 90 },
     {
@@ -263,7 +266,7 @@ function PreviewTab({ sub }: { sub: SubscriptionRow }) {
       width: 80,
       render: (s) => (s ? <Tag>已处理</Tag> : <Tag color="processing">新</Tag>),
     },
-    { title: "标题", dataIndex: "title", ellipsis: true },
+    { title: "标题", dataIndex: "title", ellipsis: ELLIPSIS, render: (v) => ellipsisCell(v) },
     {
       title: "操作",
       width: 110,
@@ -312,7 +315,12 @@ function DoneTab({ sub }: { sub: SubscriptionRow }) {
   }, [sub.id]);
 
   const columns: ColumnsType<SeenRelease> = [
-    { title: "标题", dataIndex: "title", ellipsis: true, render: (t, r) => t || r.guid },
+    {
+      title: "标题",
+      dataIndex: "title",
+      ellipsis: ELLIPSIS,
+      render: (t, r) => ellipsisCell(t || r.guid),
+    },
     {
       title: "处理时间",
       dataIndex: "ts",

@@ -19,6 +19,7 @@ import { PlusOutlined, ThunderboltOutlined, FolderOpenOutlined } from "@ant-desi
 import { api, ParserRow, SubscriberType, ParseTestResult } from "../api";
 import SchemaFields from "../components/SchemaFields";
 import DirPicker from "../components/DirPicker";
+import { ELLIPSIS, ellipsisCell } from "../components/EllipsisCell";
 
 const { Paragraph, Text } = Typography;
 
@@ -126,9 +127,11 @@ export default function Parsers() {
     {
       title: "pattern/参数",
       dataIndex: "config",
-      ellipsis: true,
-      render: (c: Record<string, unknown>) =>
-        <span className="mono">{String(c.pattern ?? Object.values(c)[0] ?? "")}</span>,
+      ellipsis: ELLIPSIS,
+      render: (c: Record<string, unknown>) => {
+        const s = String(c.pattern ?? Object.values(c)[0] ?? "");
+        return ellipsisCell(s, <span className="mono">{s}</span>);
+      },
     },
     {
       title: "启用",
@@ -209,7 +212,7 @@ export default function Parsers() {
             pagination={dirRows.length > 20 ? { pageSize: 20 } : false}
             dataSource={dirRows}
             columns={[
-              { title: "文件名", dataIndex: "name", ellipsis: true },
+              { title: "文件名", dataIndex: "name", ellipsis: ELLIPSIS, render: (v) => ellipsisCell(v) },
               {
                 title: "解析结果",
                 render: (_: unknown, r) =>

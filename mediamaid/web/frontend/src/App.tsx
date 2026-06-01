@@ -64,7 +64,7 @@ export default function App() {
           </Typography.Title>
         </Header>
         <Content style={{ padding: 24 }}>
-          <div style={{ maxWidth: 1040, margin: "0 auto" }}>
+          <div style={{ maxWidth: 1320, margin: "0 auto" }}>
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/subscriptions" element={<Subscriptions />} />
