@@ -32,7 +32,6 @@ CREATE TABLE IF NOT EXISTS processed (
 );
 CREATE INDEX IF NOT EXISTS idx_processed_src ON processed(src_path);
 CREATE INDEX IF NOT EXISTS idx_processed_inode ON processed(src_inode);
-CREATE INDEX IF NOT EXISTS idx_processed_batch ON processed(batch_id);
 
 CREATE TABLE IF NOT EXISTS seen_releases (
     guid   TEXT PRIMARY KEY,
@@ -110,6 +109,8 @@ class StateStore:
         pcols = {r["name"] for r in conn.execute("PRAGMA table_info(processed)")}
         if "batch_id" not in pcols:
             conn.execute("ALTER TABLE processed ADD COLUMN batch_id TEXT")
+        # 确保 batch_id 列存在后再建索引（旧库迁移后）
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_processed_batch ON processed(batch_id)")
 
     @staticmethod
     def _inode(path: Path) -> Optional[int]:
