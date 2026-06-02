@@ -121,6 +121,7 @@ export interface SubscriptionRow {
   name: string;
   subscriber: string;
   enabled: boolean;
+  downloader?: string | null;
   config: Record<string, unknown>;
   filters?: SubscriptionFilter;
   skip_existing?: boolean;
@@ -241,6 +242,7 @@ export const api = {
     name: string;
     subscriber: string;
     enabled: boolean;
+    downloader?: string | null;
     config: Record<string, unknown>;
     filters?: Partial<SubscriptionFilter>;
     skip_existing?: boolean;
@@ -264,6 +266,8 @@ export const api = {
   config: () => get<{ path: string; text: string }>("/api/config"),
   scan: (dry_run: boolean) => post<ScanResult>("/api/scan", { dry_run }),
   subscribe: () => post<{ submitted: number }>("/api/subscribe"),
+  downloaders: () =>
+    get<{ downloaders: { name: string; description: string }[] }>("/api/downloaders"),
   downloads: () =>
     get<{ downloaders: DownloaderInfo[]; tasks: DownloadTask[] }>("/api/downloads"),
   createDownload: (body: { downloader: string; uri: string; save_path?: string }) =>

@@ -9,11 +9,26 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 from starlette.concurrency import run_in_threadpool
 
+from ...plugins import get as get_plugin
 from ..deps import WebContext, get_ctx
 from ..schemas import NewDownloadBody
 from ..serializers import download_task_dict
 
 router = APIRouter(prefix="/api")
+
+
+@router.get("/downloaders")
+def api_downloaders(ctx: WebContext = Depends(get_ctx)):
+    """列出已配置（启用）的下载器，供订阅等处下拉选用。不连接、不查任务。"""
+    out = []
+    for spec in ctx.cfg().plugin_specs("downloader"):
+        try:
+            cls = get_plugin("downloader", spec.name)
+            desc = getattr(cls, "description", "") or ""
+        except KeyError:
+            desc = ""
+        out.append({"name": spec.name, "description": desc})
+    return {"downloaders": out}
 
 
 @router.get("/downloads")

@@ -42,6 +42,7 @@ class SubscriptionBody(BaseModel):
     name: str
     subscriber: str
     enabled: bool = True
+    downloader: Optional[str] = None
     config: dict = {}
     filters: Optional[SubscriptionFilterBody] = None
     skip_existing: Optional[bool] = None
@@ -51,6 +52,7 @@ class SubscriptionUpdate(BaseModel):
     name: Optional[str] = None
     subscriber: Optional[str] = None
     enabled: Optional[bool] = None
+    downloader: Optional[str] = None
     config: Optional[dict] = None
     filters: Optional[SubscriptionFilterBody] = None
     skip_existing: Optional[bool] = None

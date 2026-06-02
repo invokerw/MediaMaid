@@ -87,6 +87,7 @@ def sub_dict(store: StateStore, sub) -> dict:
         "name": sub.name,
         "subscriber": sub.subscriber,
         "enabled": sub.enabled,
+        "downloader": sub.downloader,
         "config": dict(sub.config),
         "filters": sub.filters.model_dump(),
         "skip_existing": sub.skip_existing,

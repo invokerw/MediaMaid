@@ -37,6 +37,7 @@ const { Paragraph } = Typography;
 export default function Subscriptions() {
   const [subs, setSubs] = useState<SubscriptionRow[]>([]);
   const [types, setTypes] = useState<SubscriberType[]>([]);
+  const [downloaders, setDownloaders] = useState<{ name: string; description: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<SubscriptionRow | null>(null);
   const [adding, setAdding] = useState(false);
@@ -56,13 +57,18 @@ export default function Subscriptions() {
   useEffect(() => {
     load();
     api.subscriberTypes().then((d) => setTypes(d.subscribers)).catch(() => {});
+    api.downloaders().then((d) => setDownloaders(d.downloaders)).catch(() => {});
   }, []);
 
   function openAdd() {
     setEditing(null);
     setAdding(true);
     form.resetFields();
-    form.setFieldsValue({ subscriber: types[0]?.name, skip_existing: true });
+    form.setFieldsValue({
+      subscriber: types[0]?.name,
+      downloader: downloaders[0]?.name ?? "",
+      skip_existing: true,
+    });
   }
 
   function openEdit(s: SubscriptionRow) {
@@ -72,6 +78,7 @@ export default function Subscriptions() {
     form.setFieldsValue({
       name: s.name,
       subscriber: s.subscriber,
+      downloader: s.downloader ?? "",
       config: s.config,
       filters: s.filters,
       skip_existing: s.skip_existing ?? true,
@@ -84,6 +91,7 @@ export default function Subscriptions() {
       name: v.name,
       subscriber: v.subscriber,
       enabled: editing ? editing.enabled : true,
+      downloader: v.downloader || "",
       config: v.config || {},
       filters: v.filters || {},
       skip_existing: v.skip_existing ?? true,
@@ -127,6 +135,13 @@ export default function Subscriptions() {
       dataIndex: "subscriber",
       width: 110,
       render: (s) => <Tag color="blue">{s}</Tag>,
+    },
+    {
+      title: "下载器",
+      dataIndex: "downloader",
+      width: 120,
+      render: (d?: string | null) =>
+        d ? <Tag color="geekblue">{d}</Tag> : <span style={{ color: "#999" }}>默认</span>,
     },
     {
       title: "URL/参数",
@@ -209,6 +224,23 @@ export default function Subscriptions() {
             <Select
               options={types.map((t) => ({ value: t.name, label: t.name }))}
               disabled={!!editing}
+            />
+          </Form.Item>
+          <Form.Item
+            name="downloader"
+            label="下载器"
+            tooltip="该订阅抓到的资源提交到哪个下载器；留空则用所有已启用下载器（首个成功者胜）"
+          >
+            <Select
+              allowClear
+              placeholder="默认（所有已启用下载器）"
+              options={[
+                { value: "", label: "默认（所有已启用下载器）" },
+                ...downloaders.map((d) => ({
+                  value: d.name,
+                  label: d.description ? `${d.name} — ${d.description}` : d.name,
+                })),
+              ]}
             />
           </Form.Item>
           <SchemaFields schema={schema} prefix={["config"]} />

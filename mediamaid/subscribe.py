@@ -72,6 +72,8 @@ class SubscribeRunner:
         self.config = config
         self.subs = build_subscriptions(config)
         self.downloaders = build_downloaders(config)
+        # 按插件名索引，供订阅按 downloader 字段精确选用
+        self.downloaders_by_name = {d.name: d for d in self.downloaders}
         self.mediaservers = build_mediaservers(config)
         # 复用识别器的解析器链，从 Release 标题解析集号（集数去重 / 择优）
         self.identifier = Identifier(config)
@@ -121,7 +123,7 @@ class SubscribeRunner:
             log.debug("媒体库已有，跳过: %s", rel.title)
             return 0
         self.store.mark_release(rel.guid, rel.title, sub.id)
-        if self._dispatch(rel):
+        if self._dispatch(rel, sub):
             if ep:
                 self.store.mark_episode(sub.id, ep[0], ep[1], ep[2], rel.guid)
             return 1
@@ -163,7 +165,21 @@ class SubscribeRunner:
                 log.warning("媒体服务器 %s 查询失败: %s", ms.name, e)
         return False
 
-    def _dispatch(self, rel) -> bool:
+    def _dispatch(self, rel, sub: Optional[Subscription] = None) -> bool:
+        # 订阅显式指定了下载器：只用它，找不到则失败（不静默回退到别的下载器，避免下错地方）
+        if sub is not None and getattr(sub, "downloader", None):
+            dl = self.downloaders_by_name.get(sub.downloader)
+            if dl is None:
+                log.warning(
+                    "订阅 %s 指定的下载器 %s 不存在/未启用，跳过下载: %s",
+                    sub.name, sub.downloader, rel.title,
+                )
+                return False
+            if dl.add(rel):
+                self._notify(Event("download_added", f"已提交下载: {rel.title}"))
+                return True
+            return False
+        # 未指定：沿用遍历所有启用下载器、首个成功者胜
         for dl in self.downloaders:
             if dl.add(rel):
                 self._notify(Event("download_added", f"已提交下载: {rel.title}"))
@@ -181,7 +197,9 @@ class SubscribeRunner:
 
     def download_release(self, rel: Release, sub_id: Optional[str] = None) -> bool:
         """手动下载单条资源：提交成功则标记已处理（含集数进度）。"""
-        ok = self._dispatch(rel)
+        # 若来自某订阅，遵循其选定的下载器
+        sub = next((s for s in self.config.subscriptions if s.id == sub_id), None) if sub_id else None
+        ok = self._dispatch(rel, sub)
         if ok:
             self.store.mark_release(rel.guid, rel.title, sub_id)
             ep = self._episode_of(rel)

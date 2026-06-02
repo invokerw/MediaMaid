@@ -76,6 +76,8 @@ class Subscription(BaseModel):
     subscriber: str  # 订阅器类型名，如 "rss"
     enabled: bool = True
     config: Dict = Field(default_factory=dict)
+    # 选定的下载器插件名（如 "qbittorrent"）；None 表示用所有启用下载器（首个成功者胜，兼容旧配置）
+    downloader: Optional[str] = None
     # 质量过滤/择优规则
     filters: SubscriptionFilter = Field(default_factory=SubscriptionFilter)
     # 是否查媒体服务器跳过"已拥有"的资源

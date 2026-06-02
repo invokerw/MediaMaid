@@ -5,7 +5,10 @@ import PathInput from "./PathInput";
 const { Text } = Typography;
 
 const isSecret = (key: string) => /key|password|secret|token/i.test(key);
-const isPath = (key: string) => /path|dir/i.test(key);
+// 仅「文件系统路径」字段用目录选择器；排除 rpc_path、transmission 的 path
+// （都是 URL 端点而非本地目录）以及 path_mappings（列表，不是单个目录）。
+const isPath = (key: string) =>
+  /path|dir/i.test(key) && !/rpc/i.test(key) && key !== "path" && key !== "path_mappings";
 
 /** 根据 JSON schema 的 properties 渲染一组 antd 表单项。
  *  name 为 [...prefix, key]，供嵌套（如 config.xxx）使用。 */

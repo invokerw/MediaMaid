@@ -134,7 +134,12 @@ class QbittorrentDownloader(Downloader):
             result = client.torrents_add(
                 urls=uri, category=cfg.category, save_path=save_path or cfg.save_path
             )
-            ok = str(result).lower().startswith("ok")
+            # qbittorrent-api 旧版返回字符串 "Ok."；新版(qB 5.x)返回 TorrentsAddedMetadata 对象，
+            # 含 success_count/added_torrent_ids。两种都要识别，否则成功仍被判为失败。
+            if hasattr(result, "success_count"):
+                ok = (getattr(result, "success_count", 0) or 0) > 0
+            else:
+                ok = str(result).lower().startswith("ok")
             log.info("提交下载[%s] %s: %s", cfg.category, uri[:60], result)
             return ok
         except Exception as e:  # noqa: BLE001

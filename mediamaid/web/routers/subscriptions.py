@@ -50,6 +50,8 @@ def api_sub_create(body: SubscriptionBody, ctx: WebContext = Depends(get_ctx)):
         "enabled": body.enabled,
         "config": body.config,
     }
+    if body.downloader:
+        item["downloader"] = body.downloader
     if body.filters is not None:
         item["filters"] = body.filters.model_dump(exclude_none=True)
     if body.skip_existing is not None:
