@@ -82,6 +82,7 @@ class Watcher:
             result = self.pipeline.process_path(path)
             if result and result.status == "done":
                 log.info("已整理: %s -> %s", path.name, result.dest)
+                self.pipeline.refresh_media_servers()
         except Exception as e:  # noqa: BLE001
             log.error("处理失败 %s: %s", path, e)
 

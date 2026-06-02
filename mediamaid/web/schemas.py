@@ -29,11 +29,22 @@ class ReleaseBody(BaseModel):
     sub_id: Optional[str] = None
 
 
+class SubscriptionFilterBody(BaseModel):
+    resolutions: Optional[List[str]] = None
+    include_keywords: Optional[List[str]] = None
+    exclude_keywords: Optional[List[str]] = None
+    min_size_mb: Optional[int] = None
+    max_size_mb: Optional[int] = None
+    prefer: Optional[List[str]] = None
+
+
 class SubscriptionBody(BaseModel):
     name: str
     subscriber: str
     enabled: bool = True
     config: dict = {}
+    filters: Optional[SubscriptionFilterBody] = None
+    skip_existing: Optional[bool] = None
 
 
 class SubscriptionUpdate(BaseModel):
@@ -41,6 +52,8 @@ class SubscriptionUpdate(BaseModel):
     subscriber: Optional[str] = None
     enabled: Optional[bool] = None
     config: Optional[dict] = None
+    filters: Optional[SubscriptionFilterBody] = None
+    skip_existing: Optional[bool] = None
 
 
 class ParserBody(BaseModel):

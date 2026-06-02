@@ -18,6 +18,7 @@ class TransferAction(str, enum.Enum):
     HARDLINK = "hardlink"
     COPY = "copy"
     MOVE = "move"
+    SYMLINK = "symlink"
 
 
 @dataclass
@@ -48,7 +49,12 @@ class MediaInfo:
     title: str
     year: Optional[int] = None
     tmdb_id: Optional[int] = None
+    # 外部 ID：写入 nfo 可显著提升 Jellyfin/Emby 匹配率
+    imdb_id: Optional[str] = None
+    tvdb_id: Optional[int] = None
     overview: Optional[str] = None
+    genres: list = field(default_factory=list)
+    rating: Optional[float] = None
     # 剧集字段
     episode_title: Optional[str] = None
     season: Optional[int] = None

@@ -39,6 +39,16 @@ CREATE TABLE IF NOT EXISTS seen_releases (
     sub_id TEXT,
     ts     REAL NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS grabbed_episodes (
+    sub_id   TEXT NOT NULL,
+    show_key TEXT NOT NULL,
+    season   INTEGER NOT NULL,
+    episode  INTEGER NOT NULL,
+    guid     TEXT,
+    ts       REAL NOT NULL,
+    PRIMARY KEY (sub_id, show_key, season, episode)
+);
 """
 
 
@@ -259,5 +269,38 @@ class StateStore:
     def count_for(self, sub_id: str) -> int:
         cur = self.conn.execute(
             "SELECT COUNT(*) AS n FROM seen_releases WHERE sub_id=?", (sub_id,)
+        )
+        return cur.fetchone()["n"]
+
+    # ---- 订阅集数进度（按集去重，跨源/换源都不重复抓）----
+    def episode_grabbed(
+        self, sub_id: str, show_key: str, season: int, episode: int
+    ) -> bool:
+        cur = self.conn.execute(
+            "SELECT 1 FROM grabbed_episodes "
+            "WHERE sub_id=? AND show_key=? AND season=? AND episode=? LIMIT 1",
+            (sub_id, show_key.lower(), season, episode),
+        )
+        return cur.fetchone() is not None
+
+    def mark_episode(
+        self,
+        sub_id: str,
+        show_key: str,
+        season: int,
+        episode: int,
+        guid: Optional[str] = None,
+    ) -> None:
+        conn = self.conn
+        conn.execute(
+            "INSERT OR IGNORE INTO grabbed_episodes "
+            "(sub_id, show_key, season, episode, guid, ts) VALUES (?,?,?,?,?,?)",
+            (sub_id, show_key.lower(), season, episode, guid, time.time()),
+        )
+        conn.commit()
+
+    def grabbed_count(self, sub_id: str) -> int:
+        cur = self.conn.execute(
+            "SELECT COUNT(*) AS n FROM grabbed_episodes WHERE sub_id=?", (sub_id,)
         )
         return cur.fetchone()["n"]

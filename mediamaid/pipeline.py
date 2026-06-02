@@ -12,7 +12,7 @@ from .identify import Identifier
 from .logging_conf import get_logger
 from .models import Event, MediaInfo, MediaItem, MediaType
 from .organizer import Organizer
-from .plugins import Notifier, Scraper, close_plugins, create, load_plugins
+from .plugins import MediaServer, Notifier, Scraper, close_plugins, create, load_plugins
 from .store import StateStore
 
 log = get_logger(__name__)
@@ -52,6 +52,17 @@ def build_notifiers(config: Config) -> List[Notifier]:
     return notifiers
 
 
+def build_mediaservers(config: Config) -> List[MediaServer]:
+    load_plugins()
+    servers: List[MediaServer] = []
+    for spec in config.plugin_specs("mediaserver"):
+        try:
+            servers.append(create("mediaserver", spec.name, spec.config))
+        except Exception as e:  # noqa: BLE001
+            log.error("加载媒体服务器 %s 失败: %s", spec.name, e)
+    return servers
+
+
 class Pipeline:
     def __init__(self, config: Config, store: Optional[StateStore] = None):
         self.store = store
@@ -75,11 +86,23 @@ class Pipeline:
         # 先关闭旧插件实例，避免 HTTP 连接/fd 泄漏
         close_plugins(getattr(self, "scrapers", None))
         close_plugins(getattr(self, "notifiers", None))
+        close_plugins(getattr(self, "mediaservers", None))
+        if getattr(self, "organizer", None) is not None:
+            self.organizer.close()
         self.config = config
         self.identifier = Identifier(config)
         self.scrapers = build_scrapers(config)
         self.notifiers = build_notifiers(config)
+        self.mediaservers = build_mediaservers(config)
         self.organizer = Organizer(config)
+
+    def refresh_media_servers(self) -> None:
+        """通知所有媒体服务器刷新库（异常不致命）。整理完一批后调用。"""
+        for ms in self.mediaservers:
+            try:
+                ms.refresh()
+            except Exception as e:  # noqa: BLE001
+                log.warning("媒体服务器 %s 刷新失败: %s", ms.name, e)
 
     def _scrape(self, item: MediaItem) -> Optional[MediaInfo]:
         """链式刮削：依次尝试各刮削器，返回首个命中的结果。"""
@@ -171,12 +194,16 @@ class Pipeline:
         path = Path(path)
         batch_id = self.store.new_batch_id() if (self.store and not dry_run) else None
         if path.is_dir():
-            return [
+            results = [
                 self.process_item(it, dry_run=dry_run, batch_id=batch_id)
                 for it in self.identifier.scan_dir(path)
             ]
-        result = self.process_path(path, dry_run=dry_run, batch_id=batch_id)
-        return [result] if result is not None else []
+        else:
+            result = self.process_path(path, dry_run=dry_run, batch_id=batch_id)
+            results = [result] if result is not None else []
+        if not dry_run and any(r and r.status == "done" for r in results):
+            self.refresh_media_servers()
+        return results
 
     def scan(self, dry_run: bool = False) -> List[Result]:
         """全量扫描所有源目录并处理。
@@ -203,4 +230,6 @@ class Pipeline:
                 )
         done = sum(1 for r in results if r.status == "done")
         log.info("完成: %d done / %d 总数", done, len(results))
+        if not dry_run and done:
+            self.refresh_media_servers()
         return results

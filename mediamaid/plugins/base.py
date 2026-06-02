@@ -112,6 +112,20 @@ class Notifier(Plugin):
             return False, f"发送失败: {e}"
 
 
+class MediaServer(Plugin):
+    """媒体服务器：整理后刷新媒体库，并可查询库中是否已有某资源（去重数据源）。"""
+
+    category = "mediaserver"
+
+    def refresh(self) -> bool:
+        """触发媒体库扫描刷新。默认无操作，子类覆写。"""
+        return False
+
+    def exists(self, item: MediaItem, info: Optional[MediaInfo] = None) -> bool:
+        """查询库中是否已存在该影片/剧集。默认 False（best-effort，子类覆写）。"""
+        return False
+
+
 # 类别名 -> 基类，供 registry 校验插件归属
 CATEGORIES = {
     Parser.category: Parser,
@@ -119,4 +133,5 @@ CATEGORIES = {
     Subscriber.category: Subscriber,
     Downloader.category: Downloader,
     Notifier.category: Notifier,
+    MediaServer.category: MediaServer,
 }

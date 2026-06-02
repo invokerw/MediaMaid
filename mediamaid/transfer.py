@@ -74,6 +74,8 @@ def transfer(
         _do_copy(source, final)
     elif action == TransferAction.MOVE:
         _do_move(source, final)
+    elif action == TransferAction.SYMLINK:
+        _do_symlink(source, final)
     else:
         raise ValueError(f"未知动作: {action}")
 
@@ -102,6 +104,11 @@ def _do_copy(source: Path, dest: Path) -> None:
     finally:
         if tmp.exists():
             tmp.unlink()
+
+
+def _do_symlink(source: Path, dest: Path) -> None:
+    """创建指向源文件的软链接（用绝对路径，跨设备无 EXDEV 限制）。"""
+    os.symlink(source.resolve(), dest)
 
 
 def _do_move(source: Path, dest: Path) -> None:

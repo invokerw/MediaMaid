@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import List, Optional
 
 from pydantic import BaseModel
@@ -72,20 +73,60 @@ class RSSSubscriber(Subscriber):
         return releases
 
 
+_MAGNET_RE = re.compile(r"magnet:\?xt=urn:[^\s\"'<>]+")
+
+
+def _is_torrent(href: str, mimetype: str) -> bool:
+    """判定一个链接是否指向种子（兼容带 query/token 的下载链接）。"""
+    if not href:
+        return False
+    if mimetype in ("application/x-bittorrent", "application/x-torrent"):
+        return True
+    if href.endswith(".torrent"):
+        return True
+    # 带 query 的下载链接：路径段含 .torrent 或常见下载路径
+    path = href.split("?", 1)[0].lower()
+    return path.endswith(".torrent") or "/download" in path or "/torrent" in path
+
+
 def _extract_links(entry) -> tuple[Optional[str], Optional[str]]:
     link = entry.get("link", "") or ""
     if link.startswith("magnet:"):
         return link, None
     magnet = None
     torrent_url = None
+
+    # 1. enclosures（标准 RSS 种子分发位）
     for enc in entry.get("enclosures", []) or []:
-        href = enc.get("href", "")
+        href = enc.get("href", "") or enc.get("url", "")
+        mime = enc.get("type", "") or ""
         if href.startswith("magnet:"):
-            magnet = href
-        elif enc.get("type", "").endswith("torrent") or href.endswith(".torrent"):
-            torrent_url = href
-    if not (magnet or torrent_url) and link.endswith(".torrent"):
+            magnet = magnet or href
+        elif _is_torrent(href, mime):
+            torrent_url = torrent_url or href
+
+    # 2. links 数组（Atom：rel=enclosure / type=application/x-bittorrent）
+    for lk in entry.get("links", []) or []:
+        href = lk.get("href", "") or ""
+        mime = lk.get("type", "") or ""
+        if href.startswith("magnet:"):
+            magnet = magnet or href
+        elif lk.get("rel") == "enclosure" and _is_torrent(href, mime):
+            torrent_url = torrent_url or href
+
+    # 3. link 本身是种子下载链接
+    if not torrent_url and _is_torrent(link, ""):
         torrent_url = link
+
+    # 4. 兜底：从正文/摘要里正则抓 magnet
+    if not magnet:
+        text = " ".join(
+            str(entry.get(k, "")) for k in ("summary", "description", "title")
+        )
+        m = _MAGNET_RE.search(text)
+        if m:
+            magnet = m.group(0)
+
     return magnet, torrent_url
 
 

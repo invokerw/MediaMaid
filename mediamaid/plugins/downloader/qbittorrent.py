@@ -14,6 +14,7 @@ from ...logging_conf import get_logger
 from ...models import Release
 from ..base import Downloader
 from ..registry import register
+from . import PathMapper
 
 log = get_logger(__name__)
 
@@ -39,21 +40,11 @@ class QbittorrentDownloader(Downloader):
     def __init__(self, config: QbittorrentConfig):
         super().__init__(config)
         self._client = None
-        # 解析为 [(远端前缀, 本地前缀)]，按远端前缀长度降序（最长匹配优先）
-        self._maps = []
-        for m in config.path_mappings:
-            if ":" in m:
-                remote, local = m.split(":", 1)
-                if remote and local:
-                    self._maps.append((remote.rstrip("/"), local.rstrip("/")))
-        self._maps.sort(key=lambda x: len(x[0]), reverse=True)
+        self._mapper = PathMapper(config.path_mappings)
 
     def _map_path(self, p: str) -> str:
         """把下载器上报的远端路径转换为 MediaMaid 本地路径。"""
-        for remote, local in self._maps:
-            if p == remote or p.startswith(remote + "/"):
-                return local + p[len(remote):]
-        return p
+        return self._mapper.map(p)
 
     def _conn(self):
         if self._client is not None:

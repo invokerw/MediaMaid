@@ -22,8 +22,8 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
-# 示例插件的可选依赖（RSS 订阅 / qBittorrent 下载）
-plugins = ["feedparser>=6", "qbittorrent-api>=2024"]
+# 示例插件的可选依赖（RSS 订阅 / qBittorrent / Transmission 下载；aria2 用核心 httpx）
+plugins = ["feedparser>=6", "qbittorrent-api>=2024", "transmission-rpc>=7"]
 # Web UI 可选依赖（前端为预构建的 React 静态产物，运行无需 Node）
 web = ["fastapi>=0.110", "uvicorn>=0.29", "ruamel.yaml>=0.18"]
 

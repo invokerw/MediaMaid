@@ -8,8 +8,10 @@ import {
   Modal,
   Form,
   Input,
+  InputNumber,
   Select,
   Tabs,
+  Divider,
   Popconfirm,
   Typography,
   message,
@@ -60,14 +62,20 @@ export default function Subscriptions() {
     setEditing(null);
     setAdding(true);
     form.resetFields();
-    form.setFieldsValue({ subscriber: types[0]?.name });
+    form.setFieldsValue({ subscriber: types[0]?.name, skip_existing: true });
   }
 
   function openEdit(s: SubscriptionRow) {
     setEditing(s);
     setAdding(true);
     form.resetFields();
-    form.setFieldsValue({ name: s.name, subscriber: s.subscriber, config: s.config });
+    form.setFieldsValue({
+      name: s.name,
+      subscriber: s.subscriber,
+      config: s.config,
+      filters: s.filters,
+      skip_existing: s.skip_existing ?? true,
+    });
   }
 
   async function onSubmit() {
@@ -77,6 +85,8 @@ export default function Subscriptions() {
       subscriber: v.subscriber,
       enabled: editing ? editing.enabled : true,
       config: v.config || {},
+      filters: v.filters || {},
+      skip_existing: v.skip_existing ?? true,
     };
     try {
       if (editing) await api.updateSubscription(editing.id, body);
@@ -127,7 +137,13 @@ export default function Subscriptions() {
         return ellipsisCell(s, <span className="mono">{s}</span>);
       },
     },
-    { title: "已处理", dataIndex: "processed", width: 90 },
+    { title: "已处理", dataIndex: "processed", width: 80 },
+    {
+      title: "已抓集数",
+      dataIndex: "grabbed_episodes",
+      width: 90,
+      render: (n?: number) => n ?? 0,
+    },
     {
       title: "启用",
       dataIndex: "enabled",
@@ -196,6 +212,49 @@ export default function Subscriptions() {
             />
           </Form.Item>
           <SchemaFields schema={schema} prefix={["config"]} />
+
+          <Divider orientation="left" plain style={{ marginTop: 8 }}>
+            高级过滤（可选）
+          </Divider>
+          <Form.Item name={["filters", "resolutions"]} label="分辨率（命中其一）">
+            <Select
+              mode="tags"
+              placeholder="如 1080p、2160p；留空不限"
+              tokenSeparators={[",", " "]}
+            />
+          </Form.Item>
+          <Form.Item name={["filters", "include_keywords"]} label="必含关键词（全部命中）">
+            <Select mode="tags" placeholder="如 中字、内封" tokenSeparators={[",", " "]} />
+          </Form.Item>
+          <Form.Item name={["filters", "exclude_keywords"]} label="排除关键词（命中即丢弃）">
+            <Select mode="tags" placeholder="如 HDTV、枪版" tokenSeparators={[",", " "]} />
+          </Form.Item>
+          <Space>
+            <Form.Item name={["filters", "min_size_mb"]} label="最小体积(MB)">
+              <InputNumber min={0} placeholder="不限" />
+            </Form.Item>
+            <Form.Item name={["filters", "max_size_mb"]} label="最大体积(MB)">
+              <InputNumber min={0} placeholder="不限" />
+            </Form.Item>
+          </Space>
+          <Form.Item
+            name={["filters", "prefer"]}
+            label="择优优先级（同一集多候选时靠前者优先）"
+          >
+            <Select
+              mode="tags"
+              placeholder="如 2160p、REMUX、内封"
+              tokenSeparators={[",", " "]}
+            />
+          </Form.Item>
+          <Form.Item
+            name="skip_existing"
+            label="跳过媒体库已有"
+            valuePropName="checked"
+            tooltip="启用后，已在媒体服务器库中的资源不再重复下载"
+          >
+            <Switch />
+          </Form.Item>
         </Form>
       </Modal>
 

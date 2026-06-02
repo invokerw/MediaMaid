@@ -1,0 +1,105 @@
+"""aria2 下载器：通过 JSON-RPC 提交磁力/种子链接。
+
+直接用 httpx 调 aria2 的 JSON-RPC（无需额外依赖）。
+
+注意：aria2 对种子下载完成后的内容路径上报较弱，list_completed 为 best-effort——
+推荐配合 watcher 监控保存目录来衔接整理，而非依赖 poll_completed。
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import List, Optional
+
+import httpx
+from pydantic import BaseModel
+
+from ...logging_conf import get_logger
+from ...models import Release
+from ..base import Downloader
+from ..registry import register
+from . import PathMapper
+
+log = get_logger(__name__)
+
+
+class Aria2Config(BaseModel):
+    host: str = "localhost"
+    port: int = 6800
+    # RPC secret（aria2c --rpc-secret），无则留空
+    secret: Optional[str] = None
+    protocol: str = "http"
+    rpc_path: str = "/jsonrpc"
+    timeout: float = 15.0
+    # 跨容器路径映射，每项 "远端前缀:本地前缀"
+    path_mappings: list[str] = []
+
+
+@register
+class Aria2Downloader(Downloader):
+    name = "aria2"
+    ConfigModel = Aria2Config
+
+    def __init__(self, config: Aria2Config):
+        super().__init__(config)
+        self.client = httpx.Client(timeout=config.timeout)
+        self._mapper = PathMapper(config.path_mappings)
+        self._url = f"{config.protocol}://{config.host}:{config.port}{config.rpc_path}"
+
+    def close(self) -> None:
+        try:
+            self.client.close()
+        except Exception:  # noqa: BLE001 - 关闭尽力而为
+            pass
+
+    def _call(self, method: str, *params):
+        """调用一个 aria2 RPC 方法；secret 作为首个 token 参数。"""
+        token = [f"token:{self.config.secret}"] if self.config.secret else []
+        payload = {
+            "jsonrpc": "2.0",
+            "id": "mediamaid",
+            "method": method,
+            "params": token + list(params),
+        }
+        resp = self.client.post(self._url, json=payload)
+        resp.raise_for_status()
+        data = resp.json()
+        if "error" in data:
+            raise RuntimeError(data["error"].get("message", "aria2 RPC error"))
+        return data.get("result")
+
+    def test(self):
+        try:
+            ver = self._call("aria2.getVersion")
+        except Exception as e:  # noqa: BLE001
+            return False, f"aria2 连接失败: {e}"
+        return True, f"已连接 aria2 {ver.get('version', '?')}"
+
+    def add(self, release: Release) -> bool:
+        uri = release.download_uri
+        if not uri:
+            log.warning("Release 无可下载链接，跳过: %s", release.title)
+            return False
+        try:
+            self._call("aria2.addUri", [uri])
+            log.info("提交下载 %s", release.title)
+            return True
+        except Exception as e:  # noqa: BLE001
+            log.error("提交下载失败 %s: %s", release.title, e)
+            return False
+
+    def list_completed(self) -> List[Path]:
+        paths: List[Path] = []
+        try:
+            stopped = self._call("aria2.tellStopped", 0, 1000, ["status", "files"])
+        except Exception as e:  # noqa: BLE001
+            log.error("查询完成任务失败: %s", e)
+            return paths
+        for task in stopped or []:
+            if task.get("status") != "complete":
+                continue
+            for f in task.get("files", []):
+                p = f.get("path")
+                if p:
+                    paths.append(Path(self._mapper.map(p)))
+        return paths

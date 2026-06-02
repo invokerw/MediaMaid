@@ -43,16 +43,18 @@ def api_sub_create(body: SubscriptionBody, ctx: WebContext = Depends(get_ctx)):
     except ValidationError as e:
         raise HTTPException(422, e.errors())
     sub_id = uuid.uuid4().hex[:8]
-    cfgio.add_subscription(
-        ctx.config_path,
-        {
-            "id": sub_id,
-            "name": body.name,
-            "subscriber": body.subscriber,
-            "enabled": body.enabled,
-            "config": body.config,
-        },
-    )
+    item = {
+        "id": sub_id,
+        "name": body.name,
+        "subscriber": body.subscriber,
+        "enabled": body.enabled,
+        "config": body.config,
+    }
+    if body.filters is not None:
+        item["filters"] = body.filters.model_dump(exclude_none=True)
+    if body.skip_existing is not None:
+        item["skip_existing"] = body.skip_existing
+    cfgio.add_subscription(ctx.config_path, item)
     ctx.manager.reload()
     return sub_dict(ctx.store, _find_sub(ctx, sub_id))
 

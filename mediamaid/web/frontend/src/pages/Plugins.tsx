@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Card, Switch, Button, Typography, Space, Drawer, Tag, List, message } from "antd";
+import { Card, Switch, Button, Typography, Space, Modal, Tag, Empty, Row, Col, message } from "antd";
 import { SettingOutlined, ThunderboltOutlined } from "@ant-design/icons";
 import { api, PluginCategory, PluginEntry } from "../api";
 import PluginForm from "../components/PluginForm";
@@ -11,11 +11,12 @@ const CATEGORY_LABEL: Record<string, string> = {
   subscriber: "订阅器",
   downloader: "下载器",
   notifier: "通知器",
+  mediaserver: "媒体服务器",
 };
 
 export default function Plugins() {
   const [categories, setCategories] = useState<PluginCategory[]>([]);
-  const [drawer, setDrawer] = useState<{ category: string; entry: PluginEntry } | null>(null);
+  const [modal, setModal] = useState<{ category: string; entry: PluginEntry } | null>(null);
 
   const load = () =>
     api
@@ -37,8 +38,8 @@ export default function Plugins() {
           : { ...c, entries: c.entries.map((e) => (e.name === updated.name ? updated : e)) }
       )
     );
-    if (drawer && drawer.category === category && drawer.entry.name === updated.name) {
-      setDrawer({ category, entry: updated });
+    if (modal && modal.category === category && modal.entry.name === updated.name) {
+      setModal({ category, entry: updated });
     }
   }
 
@@ -74,70 +75,84 @@ export default function Plugins() {
       <Paragraph type="secondary">
         切换开关启停插件；点「配置」编辑参数。改动会写回 config.yaml 并即时生效。
       </Paragraph>
-      <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+      <Space direction="vertical" size="large" style={{ width: "100%" }}>
         {categories.map((cat) => (
-          <Card
-            key={cat.category}
-            size="small"
-            title={`${CATEGORY_LABEL[cat.category] || cat.category} · ${cat.category}`}
-          >
-            <List
-              dataSource={cat.entries}
-              locale={{ emptyText: "（无）" }}
-              renderItem={(e) => (
-                <List.Item
-                  actions={[
-                    <Switch
-                      key="sw"
-                      checked={e.enabled}
-                      onChange={(v) => toggle(cat.category, e, v)}
-                    />,
-                    <Button
-                      key="test"
-                      type="link"
-                      icon={<ThunderboltOutlined />}
-                      onClick={() => testPlugin(cat.category, e)}
+          <div key={cat.category}>
+            <Typography.Title level={5} style={{ marginBottom: 12 }}>
+              {CATEGORY_LABEL[cat.category] || cat.category}
+              <Text type="secondary" style={{ fontWeight: 400, marginLeft: 8 }}>
+                {cat.category}
+              </Text>
+            </Typography.Title>
+            {cat.entries.length === 0 ? (
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="（无）" />
+            ) : (
+              <Row gutter={[16, 16]}>
+                {cat.entries.map((e) => (
+                  <Col key={e.name} xs={24} sm={12} md={8} xl={6}>
+                    <Card
+                      size="small"
+                      hoverable
+                      title={
+                        <Space>
+                          <Text strong>{e.name}</Text>
+                          {e.enabled && <Tag color="success">已启用</Tag>}
+                        </Space>
+                      }
+                      extra={
+                        <Switch
+                          checked={e.enabled}
+                          onChange={(v) => toggle(cat.category, e, v)}
+                        />
+                      }
+                      actions={[
+                        <Button
+                          key="test"
+                          type="text"
+                          icon={<ThunderboltOutlined />}
+                          onClick={() => testPlugin(cat.category, e)}
+                        >
+                          测试
+                        </Button>,
+                        <Button
+                          key="cfg"
+                          type="text"
+                          icon={<SettingOutlined />}
+                          disabled={!hasParams(e)}
+                          onClick={() => setModal({ category: cat.category, entry: e })}
+                        >
+                          配置
+                        </Button>,
+                      ]}
                     >
-                      测试
-                    </Button>,
-                    <Button
-                      key="cfg"
-                      type="link"
-                      icon={<SettingOutlined />}
-                      disabled={!hasParams(e)}
-                      onClick={() => setDrawer({ category: cat.category, entry: e })}
-                    >
-                      配置
-                    </Button>,
-                  ]}
-                >
-                  <Space>
-                    <Text strong>{e.name}</Text>
-                    {e.enabled && <Tag color="success">已启用</Tag>}
-                    {!hasParams(e) && <Text type="secondary">无参数</Text>}
-                  </Space>
-                </List.Item>
-              )}
-            />
-          </Card>
+                      <Text type="secondary">
+                        {hasParams(e) ? `${Object.keys(e.schema.properties ?? {}).length} 项参数` : "无参数"}
+                      </Text>
+                    </Card>
+                  </Col>
+                ))}
+              </Row>
+            )}
+          </div>
         ))}
       </Space>
 
-      <Drawer
-        title={drawer ? `配置 ${drawer.category}/${drawer.entry.name}` : ""}
-        width={420}
-        open={!!drawer}
-        onClose={() => setDrawer(null)}
+      <Modal
+        title={modal ? `配置 ${modal.category}/${modal.entry.name}` : ""}
+        open={!!modal}
+        onCancel={() => setModal(null)}
+        footer={null}
         destroyOnClose
+        width={480}
       >
-        {drawer && (
+        {modal && (
           <PluginForm
-            category={drawer.category}
-            entry={drawer.entry}
-            onSaved={(u) => apply(drawer.category, u)}
+            category={modal.category}
+            entry={modal.entry}
+            onSaved={(u) => apply(modal.category, u)}
           />
         )}
-      </Drawer>
+      </Modal>
     </>
   );
 }

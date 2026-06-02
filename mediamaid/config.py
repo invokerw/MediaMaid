@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import yaml
 from pydantic import BaseModel, Field
@@ -52,6 +52,22 @@ class PluginSpec(BaseModel):
     config: Dict = Field(default_factory=dict)
 
 
+class SubscriptionFilter(BaseModel):
+    """订阅的质量过滤/择优规则，对任意订阅器产出的 Release 通用。"""
+
+    # 非空时：标题须包含其一（不区分大小写），如 ["1080p", "2160p"]
+    resolutions: List[str] = Field(default_factory=list)
+    # 须全部命中（不区分大小写）
+    include_keywords: List[str] = Field(default_factory=list)
+    # 命中任一则丢弃
+    exclude_keywords: List[str] = Field(default_factory=list)
+    # 体积区间（MB），None 表示不限
+    min_size_mb: Optional[int] = None
+    max_size_mb: Optional[int] = None
+    # 择优优先级关键词：靠前者优先；同一集多候选时据此选最佳
+    prefer: List[str] = Field(default_factory=list)
+
+
 class Subscription(BaseModel):
     """一条命名订阅：选定某订阅器类型并提供其参数。"""
 
@@ -60,6 +76,10 @@ class Subscription(BaseModel):
     subscriber: str  # 订阅器类型名，如 "rss"
     enabled: bool = True
     config: Dict = Field(default_factory=dict)
+    # 质量过滤/择优规则
+    filters: SubscriptionFilter = Field(default_factory=SubscriptionFilter)
+    # 是否查媒体服务器跳过"已拥有"的资源
+    skip_existing: bool = True
 
 
 class ParserSpec(BaseModel):

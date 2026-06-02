@@ -53,7 +53,8 @@ def test_transient_failure_not_cached(monkeypatch):
     assert scraper.scrape(item) is None          # 失败：返回 None
     info = scraper.scrape(item)                   # 重试：这次成功（说明上次没被缓存毒化）
     assert info is not None and info.tmdb_id == 603
-    assert calls["n"] == 2
+    # 失败重试(1) + 成功搜索(2) + 拉详情补 genres/imdb(3)
+    assert calls["n"] == 3
     scraper.close()
 
 

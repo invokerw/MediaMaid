@@ -69,6 +69,21 @@ npm run dev          # 开发服务器，/api 代理到 127.0.0.1:8500（另开 
 npm run build        # 构建到 ../static/（提交进仓库供分发）
 ```
 
+### 重启脚本
+
+改了前端后需「重新构建 + 重启后端」才能在浏览器看到效果。`scripts/restart-web.sh`
+把这套流程（构建前端 → 停旧进程 → 后台拉起 → 健康检查）封装成一条命令：
+
+```bash
+scripts/restart-web.sh                 # 构建前端并重启(默认)
+scripts/restart-web.sh --no-build      # 跳过构建，仅重启后端
+scripts/restart-web.sh --foreground    # 前台运行，便于看日志(Ctrl-C 退出)
+```
+
+可用环境变量覆盖默认值：`CONFIG`(默认 `demo/config.yaml`)、`HOST`(默认 `0.0.0.0`)、
+`PORT`(默认 `8500`)、`PYTHON`(默认 `.venv/bin/python`)。后台模式日志默认写到
+`/tmp/mediamaid_web.log`。
+
 ## 配置
 
 见 `config.example.yaml`，含逐项注释。

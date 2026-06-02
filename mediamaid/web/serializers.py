@@ -87,7 +87,10 @@ def sub_dict(store: StateStore, sub) -> dict:
         "subscriber": sub.subscriber,
         "enabled": sub.enabled,
         "config": dict(sub.config),
+        "filters": sub.filters.model_dump(),
+        "skip_existing": sub.skip_existing,
         "processed": store.count_for(sub.id),
+        "grabbed_episodes": store.grabbed_count(sub.id),
     }
 
 

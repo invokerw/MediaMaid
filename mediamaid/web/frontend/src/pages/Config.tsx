@@ -121,6 +121,7 @@ export default function Config() {
           <Select
             options={[
               { value: "hardlink", label: "硬链接（跨盘回退复制）" },
+              { value: "symlink", label: "软链接（symlink）" },
               { value: "copy", label: "复制" },
               { value: "move", label: "移动" },
             ]}

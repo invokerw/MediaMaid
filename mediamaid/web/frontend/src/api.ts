@@ -106,13 +106,25 @@ export interface ParseTestResult {
   episode?: number | null;
 }
 
+export interface SubscriptionFilter {
+  resolutions: string[];
+  include_keywords: string[];
+  exclude_keywords: string[];
+  min_size_mb: number | null;
+  max_size_mb: number | null;
+  prefer: string[];
+}
+
 export interface SubscriptionRow {
   id: string;
   name: string;
   subscriber: string;
   enabled: boolean;
   config: Record<string, unknown>;
+  filters?: SubscriptionFilter;
+  skip_existing?: boolean;
   processed: number;
+  grabbed_episodes?: number;
 }
 
 export interface ScanResult {
@@ -210,6 +222,8 @@ export const api = {
     subscriber: string;
     enabled: boolean;
     config: Record<string, unknown>;
+    filters?: Partial<SubscriptionFilter>;
+    skip_existing?: boolean;
   }) => post<SubscriptionRow>("/api/subscriptions", body),
   updateSubscription: (id: string, body: Partial<SubscriptionRow>) =>
     put<SubscriptionRow>(`/api/subscriptions/${id}`, body),
