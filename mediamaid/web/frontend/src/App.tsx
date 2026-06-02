@@ -7,6 +7,7 @@ import {
   ApiOutlined,
   SettingOutlined,
   CloudDownloadOutlined,
+  DownloadOutlined,
   FolderOpenOutlined,
   FilterOutlined,
 } from "@ant-design/icons";
@@ -15,6 +16,7 @@ import Records from "./pages/Records";
 import Plugins from "./pages/Plugins";
 import Config from "./pages/Config";
 import Subscriptions from "./pages/Subscriptions";
+import Downloads from "./pages/Downloads";
 import Files from "./pages/Files";
 import Parsers from "./pages/Parsers";
 
@@ -23,6 +25,7 @@ const { Header, Content, Sider } = Layout;
 const items = [
   { key: "/", icon: <DashboardOutlined />, label: "仪表盘" },
   { key: "/subscriptions", icon: <CloudDownloadOutlined />, label: "订阅" },
+  { key: "/downloads", icon: <DownloadOutlined />, label: "下载" },
   { key: "/files", icon: <FolderOpenOutlined />, label: "文件" },
   { key: "/parsers", icon: <FilterOutlined />, label: "解析器" },
   { key: "/records", icon: <UnorderedListOutlined />, label: "记录" },
@@ -33,6 +36,7 @@ const items = [
 const TITLES: Record<string, string> = {
   "/": "仪表盘",
   "/subscriptions": "订阅资源",
+  "/downloads": "下载任务",
   "/files": "文件管理",
   "/parsers": "解析器",
   "/records": "处理记录",
@@ -68,6 +72,7 @@ export default function App() {
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/subscriptions" element={<Subscriptions />} />
+              <Route path="/downloads" element={<Downloads />} />
               <Route path="/files" element={<Files />} />
               <Route path="/parsers" element={<Parsers />} />
               <Route path="/records" element={<Records />} />

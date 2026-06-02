@@ -74,6 +74,14 @@ class ParseTestBody(BaseModel):
     name: str
 
 
+class NewDownloadBody(BaseModel):
+    """下载管理页手动新建下载。"""
+
+    downloader: str
+    uri: str  # 磁力 / 种子 URL / HTTP 链接
+    save_path: Optional[str] = None
+
+
 class DeleteBody(BaseModel):
     path: str
 

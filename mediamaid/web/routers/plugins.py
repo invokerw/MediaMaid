@@ -21,7 +21,12 @@ def api_plugins(ctx: WebContext = Depends(get_ctx)):
     categories = [
         {
             "category": cat,
-            "entries": [plugin_entry(config, cat, n) for n in available(cat)],
+            # 跳过 hidden 插件（如 null 兜底刮削器），它们仅供内部使用
+            "entries": [
+                plugin_entry(config, cat, n)
+                for n in available(cat)
+                if not get_plugin(cat, n).hidden
+            ],
         }
         for cat in CATEGORIES
     ]

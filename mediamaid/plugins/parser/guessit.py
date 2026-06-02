@@ -14,6 +14,7 @@ from ..registry import register
 @register
 class GuessitParser(Parser):
     name = "guessit"
+    description = "通用影视命名解析器，自动识别标题/年份/季集，作为默认兜底"
 
     def parse(self, name: str) -> Optional[ParseResult]:
         guess = dict(guessit(name))

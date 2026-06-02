@@ -37,6 +37,7 @@ class EmbyConfig(BaseModel):
 @register
 class EmbyMediaServer(MediaServer):
     name = "emby"
+    description = "Emby/Jellyfin 媒体服务器，整理后刷新媒体库并支持已拥有去重"
     ConfigModel = EmbyConfig
 
     def __init__(self, config: EmbyConfig):

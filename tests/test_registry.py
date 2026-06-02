@@ -9,7 +9,7 @@ from mediamaid.plugins.base import Scraper
 def test_load_plugins_discovers_builtins():
     load_plugins()
     assert "tmdb" in available("scraper")
-    assert "null" in available("scraper")
+    assert "noscrape" in available("scraper")
     assert "rss" in available("subscriber")
     assert "qbittorrent" in available("downloader")
     assert "log" in available("notifier")

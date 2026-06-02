@@ -27,7 +27,7 @@ class Result:
 
 
 def build_scrapers(config: Config) -> List[Scraper]:
-    """按配置加载启用的刮削器插件；为空则用 null 兜底。"""
+    """按配置加载启用的刮削器插件；为空则用 noscrape 兜底。"""
     load_plugins()
     scrapers: List[Scraper] = []
     for spec in config.plugin_specs("scraper"):
@@ -37,7 +37,7 @@ def build_scrapers(config: Config) -> List[Scraper]:
             log.error("加载刮削器 %s 失败: %s", spec.name, e)
     if not scrapers:
         log.warning("未配置刮削器，降级为仅按文件名整理（不刮削）")
-        scrapers.append(create("scraper", "null"))
+        scrapers.append(create("scraper", "noscrape"))
     return scrapers
 
 

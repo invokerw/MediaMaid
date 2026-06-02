@@ -11,12 +11,34 @@ from typing import List, Optional
 from pydantic import BaseModel
 
 from ...logging_conf import get_logger
-from ...models import Release
+from ...models import DownloadTask, Release
 from ..base import Downloader
 from ..registry import register
 from . import PathMapper
 
 log = get_logger(__name__)
+
+# qBittorrent 任务状态 -> 归一化状态
+_STATE_MAP = {
+    "downloading": "downloading",
+    "stalledDL": "downloading",
+    "metaDL": "downloading",
+    "forcedDL": "downloading",
+    "checkingDL": "downloading",
+    "allocating": "downloading",
+    "pausedDL": "paused",
+    "pausedUP": "completed",
+    "stoppedDL": "paused",
+    "stoppedUP": "completed",
+    "uploading": "seeding",
+    "stalledUP": "seeding",
+    "forcedUP": "seeding",
+    "checkingUP": "seeding",
+    "queuedDL": "queued",
+    "queuedUP": "queued",
+    "error": "error",
+    "missingFiles": "error",
+}
 
 
 class QbittorrentConfig(BaseModel):
@@ -35,6 +57,8 @@ class QbittorrentConfig(BaseModel):
 @register
 class QbittorrentDownloader(Downloader):
     name = "qbittorrent"
+    description = "qBittorrent 下载器，通过 Web API 提交磁力/种子"
+    supports_management = True
     ConfigModel = QbittorrentConfig
 
     def __init__(self, config: QbittorrentConfig):
@@ -90,19 +114,94 @@ class QbittorrentDownloader(Downloader):
         if not uri:
             log.warning("Release 无可下载链接，跳过: %s", release.title)
             return False
+        return self.add_uri(uri)
+
+    def add_uri(self, uri: str, save_path: Optional[str] = None) -> bool:
+        if not uri:
+            return False
         client = self._conn()
         if client is None:
             return False
         cfg: QbittorrentConfig = self.config
         try:
             result = client.torrents_add(
-                urls=uri, category=cfg.category, save_path=cfg.save_path
+                urls=uri, category=cfg.category, save_path=save_path or cfg.save_path
             )
             ok = str(result).lower().startswith("ok")
-            log.info("提交下载[%s] %s: %s", cfg.category, release.title, result)
+            log.info("提交下载[%s] %s: %s", cfg.category, uri[:60], result)
             return ok
         except Exception as e:  # noqa: BLE001
-            log.error("提交下载失败 %s: %s", release.title, e)
+            log.error("提交下载失败 %s: %s", uri[:60], e)
+            return False
+
+    def list_tasks(self) -> List[DownloadTask]:
+        client = self._conn()
+        if client is None:
+            return []
+        cfg: QbittorrentConfig = self.config
+        tasks: List[DownloadTask] = []
+        try:
+            for t in client.torrents_info(category=cfg.category):
+                state = str(getattr(t, "state", ""))
+                eta = getattr(t, "eta", None)
+                # qB 用 8640000 表示「未知/无限」ETA
+                if eta in (None, 8640000) or (isinstance(eta, int) and eta >= 8640000):
+                    eta = None
+                tasks.append(
+                    DownloadTask(
+                        id=str(t.hash),
+                        name=str(t.name),
+                        state=_STATE_MAP.get(state, "unknown"),
+                        progress=float(getattr(t, "progress", 0.0) or 0.0),
+                        size=int(getattr(t, "size", 0) or 0) or None,
+                        downloaded=int(getattr(t, "downloaded", 0) or 0) or None,
+                        dl_speed=int(getattr(t, "dlspeed", 0) or 0),
+                        up_speed=int(getattr(t, "upspeed", 0) or 0),
+                        eta=eta,
+                    )
+                )
+        except Exception as e:  # noqa: BLE001
+            log.error("查询任务列表失败: %s", e)
+        return tasks
+
+    def remove(self, task_id: str, delete_files: bool = False) -> bool:
+        client = self._conn()
+        if client is None:
+            return False
+        try:
+            client.torrents_delete(delete_files=delete_files, torrent_hashes=task_id)
+            return True
+        except Exception as e:  # noqa: BLE001
+            log.error("删除任务失败 %s: %s", task_id, e)
+            return False
+
+    def pause(self, task_id: str) -> bool:
+        client = self._conn()
+        if client is None:
+            return False
+        try:
+            # qbittorrent-api 5.x 起 pause/resume 更名为 stop/start，做下兼容
+            if hasattr(client.torrents, "stop"):
+                client.torrents_stop(torrent_hashes=task_id)
+            else:
+                client.torrents_pause(torrent_hashes=task_id)
+            return True
+        except Exception as e:  # noqa: BLE001
+            log.error("暂停任务失败 %s: %s", task_id, e)
+            return False
+
+    def resume(self, task_id: str) -> bool:
+        client = self._conn()
+        if client is None:
+            return False
+        try:
+            if hasattr(client.torrents, "start"):
+                client.torrents_start(torrent_hashes=task_id)
+            else:
+                client.torrents_resume(torrent_hashes=task_id)
+            return True
+        except Exception as e:  # noqa: BLE001
+            log.error("恢复任务失败 %s: %s", task_id, e)
             return False
 
     def list_completed(self) -> List[Path]:

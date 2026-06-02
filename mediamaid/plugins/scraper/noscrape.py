@@ -10,8 +10,10 @@ from ..registry import register
 
 
 @register
-class NullScraper(Scraper):
-    name = "null"
+class NoScrapeScraper(Scraper):
+    name = "noscrape"
+    description = "不查询元数据，仅按文件名整理时的内部兜底"
+    hidden = True  # 内部兜底，不在 Web 插件页展示
 
     def scrape(self, item: MediaItem) -> Optional[MediaInfo]:
         return None

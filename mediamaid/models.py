@@ -109,6 +109,28 @@ class Release:
 
 
 @dataclass
+class DownloadTask:
+    """下载器中一个任务的归一化视图（供 Web 下载管理页消费）。
+
+    各下载器把自家字段映射成这套统一字段；progress 为 0~1，速度单位 B/s，
+    eta 为秒（未知一律 None）。
+    """
+
+    id: str  # 下载器内的任务标识（qB 的 hash / Transmission 的 id / aria2 的 gid）
+    name: str
+    downloader: str = ""  # 来源下载器 name（聚合时由路由填充）
+    # 归一化状态：downloading / paused / seeding / completed / queued / error / unknown
+    state: str = "unknown"
+    progress: float = 0.0  # 0~1
+    size: Optional[int] = None  # 总字节
+    downloaded: Optional[int] = None  # 已下载字节
+    dl_speed: Optional[int] = None  # 下载速度 B/s
+    up_speed: Optional[int] = None  # 上传速度 B/s
+    eta: Optional[int] = None  # 预计剩余秒数，未知为 None
+    error: Optional[str] = None
+
+
+@dataclass
 class Event:
     """通知事件，交给通知器(Notifier)。"""
 

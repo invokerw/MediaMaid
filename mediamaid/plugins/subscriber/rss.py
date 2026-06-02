@@ -28,6 +28,7 @@ class RSSConfig(BaseModel):
 @register
 class RSSSubscriber(Subscriber):
     name = "rss"
+    description = "RSS/Atom 订阅器，解析订阅源为可下载的资源列表"
     ConfigModel = RSSConfig
 
     def test(self):

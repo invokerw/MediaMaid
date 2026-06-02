@@ -40,6 +40,7 @@ def _clean_title(t: str) -> str:
 @register
 class RegexParser(Parser):
     name = "regex"
+    description = "自定义正则解析器，用命名组从文件名提取标题/季集等字段"
     ConfigModel = RegexConfig
 
     def __init__(self, config: RegexConfig):

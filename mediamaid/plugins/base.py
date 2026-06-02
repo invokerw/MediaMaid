@@ -12,7 +12,7 @@ from typing import List, Optional, Tuple, Type
 
 from pydantic import BaseModel
 
-from ..models import Event, MediaInfo, MediaItem, ParseResult, Release
+from ..models import DownloadTask, Event, MediaInfo, MediaItem, ParseResult, Release
 
 
 class EmptyConfig(BaseModel):
@@ -25,10 +25,14 @@ class Plugin(ABC):
     """所有插件的基类。
 
     子类需声明类属性 category / name，并可声明 ConfigModel。
+    description 为一句话用途说明（展示在 Web 插件页）；hidden=True 的插件
+    属内部用途（如兜底实现），不在 Web 插件页展示。
     """
 
     category: str = ""
     name: str = ""
+    description: str = ""
+    hidden: bool = False
     ConfigModel: Type[BaseModel] = EmptyConfig
 
     def __init__(self, config: BaseModel):
@@ -80,9 +84,15 @@ class Subscriber(Plugin):
 
 
 class Downloader(Plugin):
-    """下载器：把 Release 投递给下载客户端。"""
+    """下载器：把 Release 投递给下载客户端。
+
+    supports_management=True 表示该下载器实现了任务查询/控制接口
+    （list_tasks/remove/pause/resume/add_uri），Web 下载管理页据此展示操作按钮。
+    默认 False：基类各管理方法为空实现（如 dummy 测试下载器）。
+    """
 
     category = "downloader"
+    supports_management: bool = False
 
     @abstractmethod
     def add(self, release: Release) -> bool:
@@ -92,6 +102,27 @@ class Downloader(Plugin):
     def list_completed(self) -> List[Path]:
         """返回已完成任务的文件/目录路径（可选，便于闭环）。"""
         return []
+
+    # ---- 以下为下载管理接口（可选）：默认「不支持」，实现了的下载器覆写 ----
+    def list_tasks(self) -> List[DownloadTask]:
+        """列出当前所有任务（归一化为 DownloadTask）。默认空。"""
+        return []
+
+    def remove(self, task_id: str, delete_files: bool = False) -> bool:
+        """删除任务；delete_files=True 时连同已下载文件删除。默认不支持。"""
+        return False
+
+    def pause(self, task_id: str) -> bool:
+        """暂停任务。默认不支持。"""
+        return False
+
+    def resume(self, task_id: str) -> bool:
+        """恢复任务。默认不支持。"""
+        return False
+
+    def add_uri(self, uri: str, save_path: Optional[str] = None) -> bool:
+        """以磁力/种子/HTTP 链接手动新建下载。默认不支持。"""
+        return False
 
 
 class Notifier(Plugin):

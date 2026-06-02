@@ -23,6 +23,7 @@ class WebhookConfig(BaseModel):
 @register
 class WebhookNotifier(Notifier):
     name = "webhook"
+    description = "Webhook 通知器，把事件 POST 成 JSON 到指定 URL"
     ConfigModel = WebhookConfig
 
     def notify(self, event: Event) -> None:

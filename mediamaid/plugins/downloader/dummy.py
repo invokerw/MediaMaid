@@ -34,6 +34,7 @@ class DummyConfig(BaseModel):
 @register
 class DummyDownloader(Downloader):
     name = "dummy"
+    description = "测试下载器，在指定目录创建占位文件以联调整条闭环"
     ConfigModel = DummyConfig
 
     def __init__(self, config: DummyConfig):

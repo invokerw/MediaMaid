@@ -2,14 +2,19 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List
+from typing import Dict, List
 
 from fastapi import HTTPException, Request
 
 from ..config import Config, ConfigManager
+from ..logging_conf import get_logger
+from ..plugins import create
+from ..plugins.base import Downloader
 from ..store import StateStore
+
+log = get_logger(__name__)
 
 
 @dataclass
@@ -19,10 +24,41 @@ class WebContext:
     config_path: Path
     manager: ConfigManager
     store: StateStore
+    # 下载器实例缓存：下载管理页每数秒轮询一次，不能每次都重连（qB 还要重新登录）。
+    # 按当前 Config 对象身份缓存，配置热重载（get() 返回新对象）时整体重建。
+    _dl_cache: Dict[str, Downloader] = field(default_factory=dict, init=False)
+    _dl_cfg_id: int = field(default=0, init=False)
 
     def cfg(self) -> Config:
         """当前配置（ConfigManager 按文件 mtime 自动热重载）。"""
         return self.manager.get()
+
+    def downloaders(self) -> List[Downloader]:
+        """已配置且启用的下载器实例（带缓存；配置变更时重建并关闭旧实例）。"""
+        config = self.cfg()
+        if id(config) != self._dl_cfg_id:
+            for d in self._dl_cache.values():
+                try:
+                    d.close()
+                except Exception:  # noqa: BLE001 - 关闭尽力而为
+                    pass
+            cache: Dict[str, Downloader] = {}
+            for spec in config.plugin_specs("downloader"):
+                try:
+                    cache[spec.name] = create("downloader", spec.name, spec.config)
+                except Exception as e:  # noqa: BLE001
+                    log.error("加载下载器 %s 失败: %s", spec.name, e)
+            self._dl_cache = cache
+            self._dl_cfg_id = id(config)
+        return list(self._dl_cache.values())
+
+    def downloader(self, name: str) -> Downloader:
+        """按名取单个下载器实例；不存在抛 404。"""
+        self.downloaders()  # 确保缓存为最新
+        d = self._dl_cache.get(name)
+        if d is None:
+            raise HTTPException(404, f"下载器未配置或未启用: {name}")
+        return d
 
 
 def get_ctx(request: Request) -> WebContext:

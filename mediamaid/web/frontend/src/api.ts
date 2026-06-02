@@ -28,6 +28,7 @@ export interface JsonSchema {
 }
 export interface PluginEntry {
   name: string;
+  description?: string;
   enabled: boolean;
   configured: boolean;
   config: Record<string, unknown>;
@@ -131,6 +132,25 @@ export interface ScanResult {
   dry_run: boolean;
   summary: Record<string, number>;
   items: { source: string; status: string; dest: string | null }[];
+}
+
+export interface DownloadTask {
+  id: string;
+  name: string;
+  downloader: string;
+  state: string; // downloading/paused/seeding/completed/queued/error/unknown
+  progress: number; // 0~1
+  size: number | null;
+  downloaded: number | null;
+  dl_speed: number | null;
+  up_speed: number | null;
+  eta: number | null; // 秒
+  error: string | null;
+}
+
+export interface DownloaderInfo {
+  name: string;
+  supports_management: boolean;
 }
 
 async function get<T>(url: string): Promise<T> {
@@ -244,4 +264,21 @@ export const api = {
   config: () => get<{ path: string; text: string }>("/api/config"),
   scan: (dry_run: boolean) => post<ScanResult>("/api/scan", { dry_run }),
   subscribe: () => post<{ submitted: number }>("/api/subscribe"),
+  downloads: () =>
+    get<{ downloaders: DownloaderInfo[]; tasks: DownloadTask[] }>("/api/downloads"),
+  createDownload: (body: { downloader: string; uri: string; save_path?: string }) =>
+    post<{ ok: boolean }>("/api/downloads", body),
+  cancelDownload: (name: string, id: string, deleteFiles: boolean) =>
+    send<{ ok: boolean }>(
+      "DELETE",
+      `/api/downloads/${encodeURIComponent(name)}/${encodeURIComponent(id)}?delete_files=${deleteFiles}`
+    ),
+  pauseDownload: (name: string, id: string) =>
+    post<{ ok: boolean }>(
+      `/api/downloads/${encodeURIComponent(name)}/${encodeURIComponent(id)}/pause`
+    ),
+  resumeDownload: (name: string, id: string) =>
+    post<{ ok: boolean }>(
+      `/api/downloads/${encodeURIComponent(name)}/${encodeURIComponent(id)}/resume`
+    ),
 };

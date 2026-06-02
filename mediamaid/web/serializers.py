@@ -59,6 +59,7 @@ def plugin_entry(config: Config, category: str, name: str) -> dict:
     cls = get_plugin(category, name)
     return {
         "name": name,
+        "description": cls.description,
         "enabled": bool(spec.enabled) if spec else False,
         "configured": spec is not None,
         "config": dict(spec.config) if spec else {},
@@ -91,6 +92,23 @@ def sub_dict(store: StateStore, sub) -> dict:
         "skip_existing": sub.skip_existing,
         "processed": store.count_for(sub.id),
         "grabbed_episodes": store.grabbed_count(sub.id),
+    }
+
+
+def download_task_dict(task) -> dict:
+    """把 DownloadTask 序列化为前端 JSON（progress 保持 0~1，前端乘 100）。"""
+    return {
+        "id": task.id,
+        "name": task.name,
+        "downloader": task.downloader,
+        "state": task.state,
+        "progress": task.progress,
+        "size": task.size,
+        "downloaded": task.downloaded,
+        "dl_speed": task.dl_speed,
+        "up_speed": task.up_speed,
+        "eta": task.eta,
+        "error": task.error,
     }
 
 

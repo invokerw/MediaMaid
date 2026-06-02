@@ -125,9 +125,20 @@ export default function Plugins() {
                         </Button>,
                       ]}
                     >
-                      <Text type="secondary">
-                        {hasParams(e) ? `${Object.keys(e.schema.properties ?? {}).length} 项参数` : "无参数"}
-                      </Text>
+                      <Space direction="vertical" size={4} style={{ width: "100%" }}>
+                        {e.description && (
+                          <Paragraph
+                            type="secondary"
+                            style={{ marginBottom: 0 }}
+                            ellipsis={{ rows: 2, tooltip: e.description }}
+                          >
+                            {e.description}
+                          </Paragraph>
+                        )}
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+                          {hasParams(e) ? `${Object.keys(e.schema.properties ?? {}).length} 项参数` : "无参数"}
+                        </Text>
+                      </Space>
                     </Card>
                   </Col>
                 ))}
