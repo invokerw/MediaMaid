@@ -263,6 +263,15 @@ export const api = {
     link: string | null;
     sub_id?: string;
   }) => post<{ ok: boolean }>("/api/releases/download", rel),
+  batchDownloadReleases: (releases: ReleaseRow[], sub_id?: string) =>
+    post<{ submitted: number; failed: number; failed_guids: string[] }>(
+      "/api/releases/batch-download",
+      { releases: releases.map((r) => ({ ...r, sub_id })) }
+    ),
+  markReleasesProcessed: (releases: ReleaseRow[], sub_id?: string) =>
+    post<{ marked: number }>("/api/releases/mark-processed", {
+      releases: releases.map((r) => ({ ...r, sub_id })),
+    }),
   config: () => get<{ path: string; text: string }>("/api/config"),
   scan: (dry_run: boolean) => post<ScanResult>("/api/scan", { dry_run }),
   subscribe: () => post<{ submitted: number }>("/api/subscribe"),

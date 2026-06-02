@@ -319,9 +319,12 @@ function PreviewTab({ sub }: { sub: SubscriptionRow }) {
   const [rows, setRows] = useState<ReleaseRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [dl, setDl] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [batching, setBatching] = useState<"" | "download" | "mark">("");
 
   const load = () => {
     setLoading(true);
+    setSelected([]);
     api
       .subPreview(sub.id)
       .then((d) => setRows(d.releases))
@@ -329,6 +332,8 @@ function PreviewTab({ sub }: { sub: SubscriptionRow }) {
       .finally(() => setLoading(false));
   };
   useEffect(load, [sub.id]);
+
+  const byGuid = (guids: string[]) => rows.filter((r) => guids.includes(r.guid));
 
   async function download(r: ReleaseRow) {
     setDl(r.guid);
@@ -350,6 +355,52 @@ function PreviewTab({ sub }: { sub: SubscriptionRow }) {
     }
   }
 
+  async function markOne(r: ReleaseRow) {
+    setDl(r.guid);
+    try {
+      await api.markReleasesProcessed([r], sub.id);
+      message.success(`已标记为已处理：${r.title}`);
+      load();
+    } catch (e) {
+      message.error(String(e));
+    } finally {
+      setDl(null);
+    }
+  }
+
+  async function batchDownload() {
+    const picked = byGuid(selected).filter((r) => r.magnet || r.torrent_url);
+    if (!picked.length) {
+      message.warning("所选资源都没有可下载的磁力/种子链接");
+      return;
+    }
+    setBatching("download");
+    try {
+      const r = await api.batchDownloadReleases(picked, sub.id);
+      if (r.failed) message.warning(`已提交 ${r.submitted} 个，${r.failed} 个失败`);
+      else message.success(`已提交 ${r.submitted} 个下载`);
+      load();
+    } catch (e) {
+      message.error(String(e));
+    } finally {
+      setBatching("");
+    }
+  }
+
+  async function batchMark() {
+    const picked = byGuid(selected);
+    setBatching("mark");
+    try {
+      const r = await api.markReleasesProcessed(picked, sub.id);
+      message.success(`已标记 ${r.marked} 个为已处理`);
+      load();
+    } catch (e) {
+      message.error(String(e));
+    } finally {
+      setBatching("");
+    }
+  }
+
   const columns: ColumnsType<ReleaseRow> = [
     {
       title: "状态",
@@ -360,33 +411,69 @@ function PreviewTab({ sub }: { sub: SubscriptionRow }) {
     { title: "标题", dataIndex: "title", ellipsis: ELLIPSIS, render: (v) => ellipsisCell(v) },
     {
       title: "操作",
-      width: 110,
+      width: 170,
       render: (_, r) => (
-        <Button
-          type="link"
-          size="small"
-          icon={<DownloadOutlined />}
-          loading={dl === r.guid}
-          disabled={!r.magnet && !r.torrent_url}
-          onClick={() => download(r)}
-        >
-          {r.seen ? "重新处理" : "下载"}
-        </Button>
+        <Space size={0}>
+          <Button
+            type="link"
+            size="small"
+            icon={<DownloadOutlined />}
+            loading={dl === r.guid && batching === ""}
+            disabled={(!r.magnet && !r.torrent_url) || batching !== ""}
+            onClick={() => download(r)}
+          >
+            {r.seen ? "重新处理" : "下载"}
+          </Button>
+          {!r.seen && (
+            <Button
+              type="link"
+              size="small"
+              disabled={dl === r.guid || batching !== ""}
+              onClick={() => markOne(r)}
+            >
+              标记已处理
+            </Button>
+          )}
+        </Space>
       ),
     },
   ];
 
   return (
     <>
-      <Button size="small" icon={<ReloadOutlined />} onClick={load} style={{ marginBottom: 8 }}>
-        刷新
-      </Button>
+      <Space style={{ marginBottom: 8 }} wrap>
+        <Button size="small" icon={<ReloadOutlined />} onClick={load}>
+          刷新
+        </Button>
+        <Button
+          size="small"
+          type="primary"
+          icon={<DownloadOutlined />}
+          disabled={!selected.length}
+          loading={batching === "download"}
+          onClick={batchDownload}
+        >
+          下载所选{selected.length ? `（${selected.length}）` : ""}
+        </Button>
+        <Button
+          size="small"
+          disabled={!selected.length}
+          loading={batching === "mark"}
+          onClick={batchMark}
+        >
+          标记已处理{selected.length ? `（${selected.length}）` : ""}
+        </Button>
+      </Space>
       <Table
         rowKey="guid"
         size="small"
         loading={loading}
         columns={columns}
         dataSource={rows}
+        rowSelection={{
+          selectedRowKeys: selected,
+          onChange: (keys) => setSelected(keys as string[]),
+        }}
         pagination={rows.length > 15 ? { pageSize: 15 } : false}
       />
     </>

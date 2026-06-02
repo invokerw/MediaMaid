@@ -14,10 +14,25 @@ from ...plugins import get as get_plugin
 from ...subscribe import SubscribeRunner
 from .. import cfgio
 from ..deps import WebContext, get_ctx
-from ..schemas import ReleaseBody, SubscriptionBody, SubscriptionUpdate
+from ..schemas import (
+    ReleaseBody,
+    ReleasesBatchBody,
+    SubscriptionBody,
+    SubscriptionUpdate,
+)
 from ..serializers import release_dict, sub_dict
 
 router = APIRouter(prefix="/api")
+
+
+def _to_release(rel: ReleaseBody) -> Release:
+    return Release(
+        title=rel.title,
+        guid=rel.guid,
+        magnet=rel.magnet,
+        torrent_url=rel.torrent_url,
+        link=rel.link,
+    )
 
 
 def _find_sub(ctx: WebContext, sub_id: str):
@@ -112,14 +127,49 @@ async def api_release_download(rel: ReleaseBody, ctx: WebContext = Depends(get_c
     runner = SubscribeRunner(config, ctx.store, notify=Pipeline(config, ctx.store).notify)
     if not runner.downloaders:
         raise HTTPException(400, "未配置下载器")
-    release = Release(
-        title=rel.title,
-        guid=rel.guid,
-        magnet=rel.magnet,
-        torrent_url=rel.torrent_url,
-        link=rel.link,
-    )
-    ok = await run_in_threadpool(runner.download_release, release, rel.sub_id)
+    ok = await run_in_threadpool(runner.download_release, _to_release(rel), rel.sub_id)
     if not ok:
         raise HTTPException(502, "下载器未接受该资源")
     return {"ok": True}
+
+
+@router.post("/releases/batch-download")
+async def api_releases_batch_download(
+    body: ReleasesBatchBody, ctx: WebContext = Depends(get_ctx)
+):
+    """批量下载一组资源：逐条提交，返回成功/失败明细（部分失败不报错）。"""
+    config = ctx.cfg()
+    runner = SubscribeRunner(config, ctx.store, notify=Pipeline(config, ctx.store).notify)
+    if not runner.downloaders:
+        raise HTTPException(400, "未配置下载器")
+
+    def _run():
+        ok_guids, failed_guids = [], []
+        for rel in body.releases:
+            try:
+                if runner.download_release(_to_release(rel), rel.sub_id):
+                    ok_guids.append(rel.guid)
+                else:
+                    failed_guids.append(rel.guid)
+            except Exception:  # noqa: BLE001
+                failed_guids.append(rel.guid)
+        return ok_guids, failed_guids
+
+    ok_guids, failed_guids = await run_in_threadpool(_run)
+    return {"submitted": len(ok_guids), "failed": len(failed_guids), "failed_guids": failed_guids}
+
+
+@router.post("/releases/mark-processed")
+async def api_releases_mark_processed(
+    body: ReleasesBatchBody, ctx: WebContext = Depends(get_ctx)
+):
+    """不下载，直接把一组资源标记为已处理（含集数进度）。"""
+    runner = SubscribeRunner(ctx.cfg(), ctx.store)
+
+    def _run():
+        for rel in body.releases:
+            runner.mark_processed(_to_release(rel), rel.sub_id)
+        return len(body.releases)
+
+    marked = await run_in_threadpool(_run)
+    return {"marked": marked}

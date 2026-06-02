@@ -207,6 +207,17 @@ class SubscribeRunner:
                 self.store.mark_episode(sub_id, ep[0], ep[1], ep[2], rel.guid)
         return ok
 
+    def mark_processed(self, rel: Release, sub_id: Optional[str] = None) -> None:
+        """不下载，直接把资源记为已处理（含集数进度）。
+
+        用于"我已拥有/不想要这条"——标记后订阅轮询不再重复发现，同集其它候选
+        也被集数去重跳过。
+        """
+        self.store.mark_release(rel.guid, rel.title, sub_id)
+        ep = self._episode_of(rel)
+        if ep and sub_id:
+            self.store.mark_episode(sub_id, ep[0], ep[1], ep[2], rel.guid)
+
     def run_loop(self, interval: int) -> None:
         log.info("订阅守护启动，每 %ds 一轮（Ctrl-C 退出）", interval)
         try:

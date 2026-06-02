@@ -29,6 +29,12 @@ class ReleaseBody(BaseModel):
     sub_id: Optional[str] = None
 
 
+class ReleasesBatchBody(BaseModel):
+    """批量操作（下载 / 标记已处理）一组资源；每条携带自己的 sub_id。"""
+
+    releases: List[ReleaseBody] = []
+
+
 class SubscriptionFilterBody(BaseModel):
     resolutions: Optional[List[str]] = None
     include_keywords: Optional[List[str]] = None
