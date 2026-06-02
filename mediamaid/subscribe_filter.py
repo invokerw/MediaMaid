@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import List, Optional, Tuple
 
 from .config import SubscriptionFilter
@@ -16,6 +17,14 @@ def _size_mb(rel: Release) -> Optional[float]:
     return rel.size / (1024 * 1024) if rel.size else None
 
 
+def _regex_hit(pattern: str, title: str) -> bool:
+    """标题是否匹配 pattern（不区分大小写）；pattern 非法正则时退化为子串包含。"""
+    try:
+        return re.search(pattern, title, re.IGNORECASE) is not None
+    except re.error:
+        return pattern.lower() in title.lower()
+
+
 def passes(rel: Release, f: SubscriptionFilter) -> bool:
     """Release 是否通过过滤规则。"""
     title = rel.title.lower()
@@ -24,6 +33,11 @@ def passes(rel: Release, f: SubscriptionFilter) -> bool:
     if f.include_keywords and not all(k.lower() in title for k in f.include_keywords):
         return False
     if f.exclude_keywords and any(k.lower() in title for k in f.exclude_keywords):
+        return False
+    # 正则包含/排除（作用于原始标题，不区分大小写）
+    if f.include_regex and not _regex_hit(f.include_regex, rel.title):
+        return False
+    if f.exclude_regex and _regex_hit(f.exclude_regex, rel.title):
         return False
     size = _size_mb(rel)
     if size is not None:

@@ -42,6 +42,26 @@ def test_passes_include_exclude():
     assert not sf.passes(_rel("Show 中字 HDTV"), f)       # 命中 exclude
 
 
+def test_passes_include_exclude_regex():
+    f = SubscriptionFilter(include_regex=r"S01E\d+", exclude_regex=r"720p|HDTV")
+    assert sf.passes(_rel("Show S01E03 1080p"), f)
+    assert not sf.passes(_rel("Show S02E03 1080p"), f)   # 不匹配 include
+    assert not sf.passes(_rel("Show S01E03 720p"), f)    # 命中 exclude
+
+
+def test_regex_is_case_insensitive():
+    f = SubscriptionFilter(include_regex="中字", exclude_regex="hdtv")
+    assert sf.passes(_rel("番剧 中字 1080P"), f)
+    assert not sf.passes(_rel("番剧 中字 HDTV"), f)        # exclude 不区分大小写
+
+
+def test_invalid_regex_falls_back_to_substring():
+    # 非法正则（未闭合括号）退化为子串包含，不抛异常
+    f = SubscriptionFilter(include_regex="(内封")
+    assert sf.passes(_rel("Show (内封 字幕"), f)
+    assert not sf.passes(_rel("Show 外挂"), f)
+
+
 def test_passes_size_range():
     f = SubscriptionFilter(min_size_mb=500, max_size_mb=5000)
     mb = 1024 * 1024

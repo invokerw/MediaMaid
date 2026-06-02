@@ -261,6 +261,20 @@ export default function Subscriptions() {
           <Form.Item name={["filters", "exclude_keywords"]} label="排除关键词（命中即丢弃）">
             <Select mode="tags" placeholder="如 HDTV、枪版" tokenSeparators={[",", " "]} />
           </Form.Item>
+          <Form.Item
+            name={["filters", "include_regex"]}
+            label="包含（关键字 / 正则）"
+            tooltip="填写后，仅标题匹配该正则的资源才处理；不区分大小写。普通关键字也可直接填，正则非法时退化为子串包含。"
+          >
+            <Input placeholder="如 中字|内封 或 S01E\d+；留空不限" allowClear />
+          </Form.Item>
+          <Form.Item
+            name={["filters", "exclude_regex"]}
+            label="排除（关键字 / 正则）"
+            tooltip="填写后，标题匹配该正则的资源直接丢弃；不区分大小写。普通关键字也可直接填，正则非法时退化为子串包含。"
+          >
+            <Input placeholder="如 720p|HDTV|预告；留空不排除" allowClear />
+          </Form.Item>
           <Space>
             <Form.Item name={["filters", "min_size_mb"]} label="最小体积(MB)">
               <InputNumber min={0} placeholder="不限" />

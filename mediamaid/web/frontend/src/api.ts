@@ -111,6 +111,8 @@ export interface SubscriptionFilter {
   resolutions: string[];
   include_keywords: string[];
   exclude_keywords: string[];
+  include_regex: string | null;
+  exclude_regex: string | null;
   min_size_mb: number | null;
   max_size_mb: number | null;
   prefer: string[];

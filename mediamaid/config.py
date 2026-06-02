@@ -61,6 +61,10 @@ class SubscriptionFilter(BaseModel):
     include_keywords: List[str] = Field(default_factory=list)
     # 命中任一则丢弃
     exclude_keywords: List[str] = Field(default_factory=list)
+    # 包含正则：非空时，标题须匹配该正则才处理（不区分大小写；正则非法时退化为子串包含）
+    include_regex: Optional[str] = None
+    # 排除正则：非空时，标题匹配该正则即丢弃（不区分大小写；正则非法时退化为子串包含）
+    exclude_regex: Optional[str] = None
     # 体积区间（MB），None 表示不限
     min_size_mb: Optional[int] = None
     max_size_mb: Optional[int] = None

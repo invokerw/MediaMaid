@@ -39,6 +39,8 @@ class SubscriptionFilterBody(BaseModel):
     resolutions: Optional[List[str]] = None
     include_keywords: Optional[List[str]] = None
     exclude_keywords: Optional[List[str]] = None
+    include_regex: Optional[str] = None
+    exclude_regex: Optional[str] = None
     min_size_mb: Optional[int] = None
     max_size_mb: Optional[int] = None
     prefer: Optional[List[str]] = None
