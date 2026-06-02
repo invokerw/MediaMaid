@@ -1,6 +1,6 @@
 """RSS 订阅器：解析 RSS/Atom 源为 Release 列表。
 
-依赖 feedparser（可选，pip install 'mediamaid[plugins]'），惰性 import。
+依赖 feedparser（可选）。惰性 import，缺失时经 deps.require 自动安装。
 """
 
 from __future__ import annotations
@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from ...logging_conf import get_logger
 from ...models import Release
 from ..base import Subscriber
+from ..deps import require
 from ..registry import register
 
 log = get_logger(__name__)
@@ -39,11 +40,10 @@ class RSSSubscriber(Subscriber):
         return True, f"RSS 可达，抓取到 {len(releases)} 条"
 
     def fetch(self) -> List[Release]:
-        try:
-            import feedparser  # 惰性 import
-        except ImportError:
-            log.error("RSS 订阅器需要 feedparser：pip install 'mediamaid[plugins]'")
-            return []
+        feedparser, err = require("feedparser")  # 缺失则自动安装
+        if feedparser is None:
+            # 调用方（subscribe / test）均已 try/except，抛出以回显真实原因
+            raise RuntimeError(err)
 
         cfg: RSSConfig = self.config
         feed = feedparser.parse(cfg.url)

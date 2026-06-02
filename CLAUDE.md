@@ -59,6 +59,7 @@ scripts/restart-web.sh --no-build      # 仅重启后端
 - **新增插件 = 在 `mediamaid/plugins/<category>/` 放一个 `.py`，继承对应基类并 `@register`**（`plugins/registry.py`）。文件落地即被自动发现（目录扫描），无需改注册表。
 - 插件声明类属性 `category` / `name`，并可声明 `ConfigModel`（pydantic）做配置校验。`create(category, name, config)` 会用 `ConfigModel.model_validate` 校验后实例化。
 - **重依赖务必在 `__init__`/方法内惰性 import**，否则缺该依赖会让 `load_plugins()` 整体受影响（registry 对单模块加载失败是容错的，但惰性 import 是约定）。
+- **可选依赖统一用 `plugins/deps.py` 的 `require(module, pip_name)` 惰性加载**：缺失时自动 `pip install` 后重试，返回 `(模块, 错误信息)`。约定——`_conn()` 等用它拿模块，把返回的错误信息存到 `self._conn_error`，`test()` 据此回显（缺依赖/安装失败 vs 登录/连接失败要分开报，别收敛成一句笼统提示）。自动安装默认开启，`MEDIAMAID_AUTO_INSTALL=0` 可关闭（离线环境）。参考 `downloader/qbittorrent.py`。
 - 外部 pip 包可经 entry_points 组 `mediamaid.plugins` 提供插件（见 `pyproject.toml` 注释）。
 - `load_plugins()` 幂等；持有连接的插件应覆写 `close()`，热重载替换实例前会调用以避免 fd/连接泄漏。
 

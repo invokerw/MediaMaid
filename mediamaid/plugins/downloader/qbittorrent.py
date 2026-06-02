@@ -1,6 +1,6 @@
 """qBittorrent 下载器：通过 Web API 提交磁力/种子。
 
-依赖 qbittorrent-api（可选，pip install 'mediamaid[plugins]'），惰性 import。
+依赖 qbittorrent-api（可选）。惰性 import，缺失时经 deps.require 自动安装。
 """
 
 from __future__ import annotations
@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from ...logging_conf import get_logger
 from ...models import DownloadTask, Release
 from ..base import Downloader
+from ..deps import require
 from ..registry import register
 from . import PathMapper
 
@@ -65,6 +66,8 @@ class QbittorrentDownloader(Downloader):
         super().__init__(config)
         self._client = None
         self._mapper = PathMapper(config.path_mappings)
+        # 最近一次连接失败原因（缺依赖 / 登录失败等），供 test() 精确回显
+        self._conn_error: Optional[str] = None
 
     def _map_path(self, p: str) -> str:
         """把下载器上报的远端路径转换为 MediaMaid 本地路径。"""
@@ -73,21 +76,25 @@ class QbittorrentDownloader(Downloader):
     def _conn(self):
         if self._client is not None:
             return self._client
-        try:
-            import qbittorrentapi  # 惰性 import
-        except ImportError:
-            log.error("qBittorrent 下载器需要 qbittorrent-api：pip install 'mediamaid[plugins]'")
+        qba, err = require("qbittorrentapi", "qbittorrent-api")  # 缺失则自动安装
+        if qba is None:
+            log.error("qBittorrent 下载器依赖不可用: %s", err)
+            self._conn_error = err
             return None
         cfg: QbittorrentConfig = self.config
-        client = qbittorrentapi.Client(
+        client = qba.Client(
             host=cfg.host, port=cfg.port, username=cfg.username, password=cfg.password
         )
         try:
             client.auth_log_in()
         except Exception as e:  # noqa: BLE001
-            log.error("qBittorrent 登录失败 %s:%s: %s", cfg.host, cfg.port, e)
+            # 部分异常（如登录被拒）str() 为空，回退到类型名，避免提示空白
+            detail = str(e) or type(e).__name__
+            log.error("qBittorrent 登录失败 %s:%s: %s", cfg.host, cfg.port, detail)
+            self._conn_error = f"登录失败 {cfg.host}:{cfg.port}: {detail}"
             return None
         self._client = client
+        self._conn_error = None
         return client
 
     def close(self) -> None:
@@ -102,7 +109,7 @@ class QbittorrentDownloader(Downloader):
     def test(self):
         client = self._conn()
         if client is None:
-            return False, "qBittorrent 登录失败：检查地址/账号密码或依赖是否安装"
+            return False, self._conn_error or "qBittorrent 连接失败：检查地址/账号密码"
         try:
             ver = client.app.version
         except Exception:  # noqa: BLE001

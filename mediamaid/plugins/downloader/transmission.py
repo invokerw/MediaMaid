@@ -1,6 +1,6 @@
 """Transmission 下载器：通过 RPC 提交磁力/种子并查询完成任务。
 
-依赖 transmission-rpc（可选，pip install 'mediamaid[plugins]'），惰性 import。
+依赖 transmission-rpc（可选）。惰性 import，缺失时经 deps.require 自动安装。
 """
 
 from __future__ import annotations
@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from ...logging_conf import get_logger
 from ...models import DownloadTask, Release
 from ..base import Downloader
+from ..deps import require
 from ..registry import register
 from . import PathMapper
 
@@ -53,20 +54,20 @@ class TransmissionDownloader(Downloader):
         super().__init__(config)
         self._client = None
         self._mapper = PathMapper(config.path_mappings)
+        # 最近一次连接失败原因（缺依赖 / 连接失败等），供 test() 精确回显
+        self._conn_error: Optional[str] = None
 
     def _conn(self):
         if self._client is not None:
             return self._client
-        try:
-            from transmission_rpc import Client  # 惰性 import
-        except ImportError:
-            log.error(
-                "Transmission 下载器需要 transmission-rpc：pip install 'mediamaid[plugins]'"
-            )
+        mod, err = require("transmission_rpc", "transmission-rpc")  # 缺失则自动安装
+        if mod is None:
+            log.error("Transmission 下载器依赖不可用: %s", err)
+            self._conn_error = err
             return None
         cfg: TransmissionConfig = self.config
         try:
-            client = Client(
+            client = mod.Client(
                 protocol=cfg.protocol,
                 host=cfg.host,
                 port=cfg.port,
@@ -75,9 +76,12 @@ class TransmissionDownloader(Downloader):
                 password=cfg.password,
             )
         except Exception as e:  # noqa: BLE001
-            log.error("Transmission 连接失败 %s:%s: %s", cfg.host, cfg.port, e)
+            detail = str(e) or type(e).__name__
+            log.error("Transmission 连接失败 %s:%s: %s", cfg.host, cfg.port, detail)
+            self._conn_error = f"连接失败 {cfg.host}:{cfg.port}: {detail}"
             return None
         self._client = client
+        self._conn_error = None
         return client
 
     def close(self) -> None:
@@ -87,7 +91,7 @@ class TransmissionDownloader(Downloader):
     def test(self):
         client = self._conn()
         if client is None:
-            return False, "Transmission 连接失败：检查地址/账号密码或依赖是否安装"
+            return False, self._conn_error or "Transmission 连接失败：检查地址/账号密码"
         try:
             ver = client.get_session().version
         except Exception as e:  # noqa: BLE001
