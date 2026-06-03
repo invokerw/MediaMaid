@@ -47,7 +47,7 @@ scripts/restart-web.sh --no-build      # 仅重启后端
    └─► 解析/识别(identify) ─► 刮削(scraper) ─► 整理入库(organizer) ─► 通知器 / 媒体服务器刷新
 ```
 
-- **`pipeline.py` 是核心编排器**。`Pipeline.process_item/process_path/process_target/scan` 串起识别→刮削→落地→写状态库。`build_scrapers/build_notifiers/build_mediaservers` 按配置实例化插件；刮削是**链式**的（依次尝试，首个命中者胜），无刮削器时降级到 `noscrape`（仅按文件名整理）。
+- **`pipeline.py` 是核心编排器**。`Pipeline.process_item/process_path/process_target/scan` 串起识别→刮削→落地→写状态库。`build_notifiers/build_mediaservers` 按配置实例化插件。**刮削器固定为 TMDB（始终启用、不可关闭，不再支持其他刮削器）**：`build_scrapers` 只实例化 tmdb，**未配置 api_key 直接抛 `RuntimeError`**（不再降级为仅按文件名整理）。订阅/通知流程不需要刮削器，用 `build_notify(config)` 单独构造通知回调，避免缺 key 时被误伤。
 - **`daemon.py`（`mediamaid run`）** 把 watcher + 订阅轮询 + 完成轮询 + 配置热重载合成一个常驻进程，每条都是 daemon 线程。是理解“闭环”的入口。
 - **`identify.py`** 用**解析器链**（`config.parsers` 顺序）把文件名解析成 `MediaItem`；`guessit` 始终作为最后兜底（用户没显式配它就自动追加）。
 - **`organizer.py` + `naming.py` + `transfer.py`**：`organizer.plan()` 算目标路径（命名模板见 `config.NamingConfig`），`transfer` 执行硬链接（跨盘自动回退复制）/复制（临时文件+原子改名）/移动，冲突按 `on_conflict`（skip/overwrite/rename）处理。

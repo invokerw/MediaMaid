@@ -1,8 +1,10 @@
 from pathlib import Path
 
+import pytest
+
 from mediamaid.config import Config
 from mediamaid.models import TransferAction
-from mediamaid.pipeline import Pipeline
+from mediamaid.pipeline import Pipeline, build_scrapers
 from mediamaid.store import StateStore
 
 
@@ -58,6 +60,28 @@ def test_anime_keyword_routes_to_anime_dir(tmp_path):
     # 命中 anime 关键词 → 进 Anime/ 目录
     hits = list((cfg.library_dir / "Anime").rglob("*.mkv"))
     assert hits, "动漫文件应整理进 Anime/ 目录"
+
+
+def test_build_scrapers_requires_tmdb_key(tmp_path):
+    # 顶层 import 的 build_scrapers 指向原函数，不受 conftest 桩替换影响。
+    base = _make_config(tmp_path)  # 借其路径，构造不同 plugins 的 Config
+
+    def _cfg(plugins):
+        return Config(
+            source_dirs=base.source_dirs,
+            library_dir=base.library_dir,
+            state_db=base.state_db,
+            plugins=plugins,
+        )
+
+    # 无 tmdb 配置 / 空 api_key 都应报错
+    with pytest.raises(RuntimeError, match="TMDB"):
+        build_scrapers(_cfg({}))
+    with pytest.raises(RuntimeError, match="TMDB"):
+        build_scrapers(_cfg({"scraper": [{"name": "tmdb", "config": {"api_key": ""}}]}))
+    # 配了 api_key 则固定返回 tmdb
+    scrapers = build_scrapers(_cfg({"scraper": [{"name": "tmdb", "config": {"api_key": "k"}}]}))
+    assert [s.name for s in scrapers] == ["tmdb"]
 
 
 def test_dedup_skips_second_run(tmp_path):

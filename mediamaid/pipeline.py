@@ -5,7 +5,7 @@ from __future__ import annotations
 import threading
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 
 from .config import Config
 from .identify import Identifier
@@ -27,18 +27,33 @@ class Result:
 
 
 def build_scrapers(config: Config) -> List[Scraper]:
-    """按配置加载启用的刮削器插件；为空则用 noscrape 兜底。"""
+    """刮削器固定为 TMDB（始终启用、不可关闭）：取其配置实例化。
+    未配置 api_key 直接报错——不再降级为仅按文件名整理。"""
     load_plugins()
-    scrapers: List[Scraper] = []
-    for spec in config.plugin_specs("scraper"):
-        try:
-            scrapers.append(create("scraper", spec.name, spec.config))
-        except Exception as e:  # noqa: BLE001
-            log.error("加载刮削器 %s 失败: %s", spec.name, e)
-    if not scrapers:
-        log.warning("未配置刮削器，降级为仅按文件名整理（不刮削）")
-        scrapers.append(create("scraper", "noscrape"))
-    return scrapers
+    # 忽略 enabled 字段——刮削器不可关闭，仅取 tmdb 的配置块
+    spec = next((s for s in config.plugins.get("scraper", []) if s.name == "tmdb"), None)
+    tmdb_cfg = dict(spec.config) if spec else {}
+    if not str(tmdb_cfg.get("api_key") or "").strip():
+        raise RuntimeError(
+            "未配置 TMDB API key：刮削器固定使用 TMDB，请在「插件」页或 config.yaml 的 "
+            "plugins.scraper[tmdb].config.api_key 填写后再运行。"
+        )
+    return [create("scraper", "tmdb", tmdb_cfg)]
+
+
+def build_notify(config: Config) -> Callable[[Event], None]:
+    """构造一个独立的通知回调（只建通知器、不触碰刮削器），供订阅流程复用——
+    订阅/通知本身无需 TMDB，借此避免缺 api_key 时被刮削器报错误伤。"""
+    notifiers = build_notifiers(config)
+
+    def _notify(event: Event) -> None:
+        for n in notifiers:
+            try:
+                n.notify(event)
+            except Exception as e:  # noqa: BLE001
+                log.warning("通知器 %s 失败: %s", n.name, e)
+
+    return _notify
 
 
 def build_notifiers(config: Config) -> List[Notifier]:

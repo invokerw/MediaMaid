@@ -11,8 +11,10 @@ from rich.table import Table
 
 from .config import ConfigManager, load_config
 from .daemon import Daemon
+from .identify import Identifier
+from .organizer import Organizer
 from .logging_conf import setup_logging, get_logger
-from .pipeline import Pipeline
+from .pipeline import Pipeline, build_notify
 from .plugins import CATEGORIES, available, load_plugins
 from .store import StateStore
 from .models import TransferAction
@@ -32,6 +34,15 @@ def _load(config: Path, verbose: bool):
     return load_config(config)
 
 
+def _pipeline(cfg, store=None) -> Pipeline:
+    """构造 Pipeline；缺 TMDB api_key 等配置错误时友好报错退出。"""
+    try:
+        return Pipeline(cfg, store)
+    except RuntimeError as e:
+        console.print(f"[red]{e}[/]")
+        raise typer.Exit(1)
+
+
 @app.command()
 def scan(
     config: Path = typer.Option(DEFAULT_CONFIG, "--config", "-c", help="配置文件路径"),
@@ -41,7 +52,7 @@ def scan(
     """对源目录做一次全量扫描整理。"""
     cfg = _load(config, verbose)
     with StateStore(cfg.state_db) as store:
-        pipeline = Pipeline(cfg, store)
+        pipeline = _pipeline(cfg, store)
         results = pipeline.scan(dry_run=dry_run)
     _print_results(results)
 
@@ -54,7 +65,7 @@ def watch(
     """常驻监控源目录，自动整理新文件。"""
     cfg = _load(config, verbose)
     with StateStore(cfg.state_db) as store:
-        pipeline = Pipeline(cfg, store)
+        pipeline = _pipeline(cfg, store)
         Watcher(cfg, pipeline).start()
 
 
@@ -68,7 +79,12 @@ def run(
     load_plugins()
     manager = ConfigManager(config)
     with StateStore(manager.get().state_db) as store:
-        Daemon(manager, store).run()
+        try:
+            daemon = Daemon(manager, store)
+        except RuntimeError as e:
+            console.print(f"[red]{e}[/]")
+            raise typer.Exit(1)
+        daemon.run()
 
 
 @app.command()
@@ -160,15 +176,14 @@ def identify(
     path: Path = typer.Argument(..., help="要解析的文件路径"),
     config: Path = typer.Option(DEFAULT_CONFIG, "--config", "-c"),
 ):
-    """调试：打印某文件的识别结果与目标路径。"""
+    """调试：打印某文件的识别结果与目标路径（仅解析/命名，不刮削，无需 TMDB key）。"""
     cfg = _load(config, True)
-    pipeline = Pipeline(cfg)
-    item = pipeline.identifier.identify(path)
+    item = Identifier(cfg).identify(path)
     if item is None:
         console.print("[red]无法识别[/]")
         raise typer.Exit(1)
     console.print(item)
-    plan = pipeline.organizer.plan(item, None)
+    plan = Organizer(cfg).plan(item, None)
     console.print(f"目标(仅文件名规则): {plan.dest}")
 
 
@@ -182,8 +197,7 @@ def subscribe(
     """运行订阅器发现新资源并交给下载器。"""
     cfg = _load(config, verbose)
     with StateStore(cfg.state_db) as store:
-        pipeline = Pipeline(cfg, store)
-        runner = SubscribeRunner(cfg, store, notify=pipeline.notify)
+        runner = SubscribeRunner(cfg, store, notify=build_notify(cfg))
         if loop:
             runner.run_loop(interval)
         else:

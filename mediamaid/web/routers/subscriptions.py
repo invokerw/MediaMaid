@@ -9,7 +9,7 @@ from pydantic import ValidationError
 from starlette.concurrency import run_in_threadpool
 
 from ...models import Release
-from ...pipeline import Pipeline
+from ...pipeline import build_notify
 from ...plugins import get as get_plugin
 from ...subscribe import SubscribeRunner
 from .. import cfgio
@@ -124,7 +124,7 @@ def api_sub_releases(sub_id: str, limit: int = 200, ctx: WebContext = Depends(ge
 @router.post("/releases/download")
 async def api_release_download(rel: ReleaseBody, ctx: WebContext = Depends(get_ctx)):
     config = ctx.cfg()
-    runner = SubscribeRunner(config, ctx.store, notify=Pipeline(config, ctx.store).notify)
+    runner = SubscribeRunner(config, ctx.store, notify=build_notify(config))
     if not runner.downloaders:
         raise HTTPException(400, "未配置下载器")
     ok = await run_in_threadpool(runner.download_release, _to_release(rel), rel.sub_id)
@@ -139,7 +139,7 @@ async def api_releases_batch_download(
 ):
     """批量下载一组资源：逐条提交，返回成功/失败明细（部分失败不报错）。"""
     config = ctx.cfg()
-    runner = SubscribeRunner(config, ctx.store, notify=Pipeline(config, ctx.store).notify)
+    runner = SubscribeRunner(config, ctx.store, notify=build_notify(config))
     if not runner.downloaders:
         raise HTTPException(400, "未配置下载器")
 

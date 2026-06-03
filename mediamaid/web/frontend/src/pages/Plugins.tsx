@@ -74,6 +74,7 @@ export default function Plugins() {
     <>
       <Paragraph type="secondary">
         切换开关启停插件；点「配置」编辑参数。改动会写回 config.yaml 并即时生效。
+        刮削器固定使用 TMDB（始终启用、不可关闭），仅需填写 API Key。
       </Paragraph>
       <Space direction="vertical" size="large" style={{ width: "100%" }}>
         {categories.map((cat) => (
@@ -99,11 +100,16 @@ export default function Plugins() {
                           {e.enabled && <Tag color="success">已启用</Tag>}
                         </Space>
                       }
+                      // 刮削器固定为 TMDB，不可关闭——以「内置」标识替代启停开关
                       extra={
-                        <Switch
-                          checked={e.enabled}
-                          onChange={(v) => toggle(cat.category, e, v)}
-                        />
+                        cat.category === "scraper" ? (
+                          <Tag>内置</Tag>
+                        ) : (
+                          <Switch
+                            checked={e.enabled}
+                            onChange={(v) => toggle(cat.category, e, v)}
+                          />
+                        )
                       }
                       actions={[
                         <Button

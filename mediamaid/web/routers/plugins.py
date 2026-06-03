@@ -46,8 +46,10 @@ def api_plugin_update(category: str, name: str, body: PluginBody,
         cls.ConfigModel.model_validate(body.config)
     except ValidationError as e:
         raise HTTPException(422, e.errors())
+    # 刮削器固定为 TMDB，不可关闭——强制启用，无视请求里的 enabled
+    enabled = True if category == "scraper" else body.enabled
     # 持久化(保留注释) + 热重载
-    cfgio.upsert_plugin(ctx.config_path, category, name, body.enabled, body.config)
+    cfgio.upsert_plugin(ctx.config_path, category, name, enabled, body.config)
     config = ctx.manager.reload()
     return plugin_entry(config, category, name)
 

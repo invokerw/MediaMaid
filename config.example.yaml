@@ -55,11 +55,11 @@ anime_keywords: []   # 如 [anime, 动漫]
 # 插件配置：类别 -> 该类别启用的插件实例列表。
 # 用 `mediamaid plugins` 查看全部可用插件。
 plugins:
+  # 刮削器固定为 tmdb（始终启用、不可关闭，enabled 字段已无效）
   scraper:
     - name: tmdb
-      enabled: true
       config:
-        # 在 https://www.themoviedb.org/settings/api 申请
+        # 在 https://www.themoviedb.org/settings/api 申请——必填，留空会直接报错
         api_key: ""
         language: zh-CN
         min_confidence: 0.5

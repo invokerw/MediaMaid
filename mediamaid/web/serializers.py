@@ -57,10 +57,12 @@ def plugin_entry(config: Config, category: str, name: str) -> dict:
     """组装单个插件的 UI 信息：启停 + 当前配置 + 配置 schema。"""
     spec = next((s for s in config.plugins.get(category, []) if s.name == name), None)
     cls = get_plugin(category, name)
+    # 刮削器固定为 TMDB，始终启用、不可关闭
+    enabled = True if category == "scraper" else (bool(spec.enabled) if spec else False)
     return {
         "name": name,
         "description": cls.description,
-        "enabled": bool(spec.enabled) if spec else False,
+        "enabled": enabled,
         "configured": spec is not None,
         "config": dict(spec.config) if spec else {},
         "schema": cls.ConfigModel.model_json_schema(),

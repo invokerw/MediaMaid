@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from starlette.concurrency import run_in_threadpool
 
-from ...pipeline import Pipeline
+from ...pipeline import Pipeline, build_notify
 from ...subscribe import SubscribeRunner
 from ..deps import WebContext, get_ctx
 from ..schemas import ScanBody
@@ -34,7 +34,10 @@ def api_records(status: Optional[str] = None, ctx: WebContext = Depends(get_ctx)
 
 @router.post("/scan")
 async def api_scan(body: ScanBody, ctx: WebContext = Depends(get_ctx)):
-    pipeline = Pipeline(ctx.cfg(), ctx.store)
+    try:
+        pipeline = Pipeline(ctx.cfg(), ctx.store)
+    except RuntimeError as e:  # 未配置 TMDB api_key 等
+        raise HTTPException(400, str(e))
     results = await run_in_threadpool(pipeline.scan, body.dry_run)
     summary: dict = {}
     items = []
@@ -53,6 +56,6 @@ async def api_scan(body: ScanBody, ctx: WebContext = Depends(get_ctx)):
 @router.post("/subscribe")
 async def api_subscribe(ctx: WebContext = Depends(get_ctx)):
     config = ctx.cfg()
-    runner = SubscribeRunner(config, ctx.store, notify=Pipeline(config, ctx.store).notify)
+    runner = SubscribeRunner(config, ctx.store, notify=build_notify(config))
     submitted = await run_in_threadpool(runner.run_once)
     return {"submitted": submitted}

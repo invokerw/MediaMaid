@@ -213,9 +213,10 @@ def test_plugin_update_persists_and_reloads(client):
     specs = {s.name: s for s in reloaded.plugin_specs("scraper")}
     assert "tmdb" in specs and specs["tmdb"].config["language"] == "en-US"
 
-    # 停用
+    # 刮削器固定为 TMDB、不可关闭：即便请求 enabled=false 也仍保持启用
     r = c.put("/api/plugins/scraper/tmdb", json={"enabled": False, "config": {"api_key": "abc"}})
-    assert r.json()["enabled"] is False
+    assert r.json()["enabled"] is True
+    assert load_config(cfg_path).plugins["scraper"][0].enabled is True
 
 
 def test_plugin_update_validation_error(client):
