@@ -21,8 +21,6 @@ log = get_logger(__name__)
 
 class RSSConfig(BaseModel):
     url: str
-    # 可选：仅保留标题包含该关键词的条目（不区分大小写）
-    filter_keyword: Optional[str] = None
     timeout: float = 30.0
 
 
@@ -51,11 +49,8 @@ class RSSSubscriber(Subscriber):
             log.warning("RSS 解析告警 %s: %s", cfg.url, getattr(feed, "bozo_exception", ""))
 
         releases: List[Release] = []
-        kw = cfg.filter_keyword.lower() if cfg.filter_keyword else None
         for entry in feed.entries:
             title = entry.get("title", "")
-            if kw and kw not in title.lower():
-                continue
             magnet, torrent_url = _extract_links(entry)
             guid = entry.get("id") or entry.get("link") or title
             releases.append(

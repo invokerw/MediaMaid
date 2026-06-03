@@ -73,7 +73,8 @@ plugins:
   # 以下需要 pip install 'mediamaid[plugins]'
   # subscriber:
   #   - name: rss
-  #     config: {url: "https://example.com/rss", filter_keyword: 1080p}
+  #     config: {url: "https://example.com/rss"}
+  #     # 标题过滤在订阅(subscriptions)的 filters 里配（include_regex/exclude_regex，支持关键字或正则）
   # downloader:
   #   - name: qbittorrent
   #     # save_path 建议指向上面的 source_dirs，下载完成即被监控整理（闭环衔接）

@@ -93,7 +93,8 @@ export default function Subscriptions() {
       enabled: editing ? editing.enabled : true,
       downloader: v.downloader || "",
       config: v.config || {},
-      filters: v.filters || {},
+      // 合并：表单只暴露 include_regex/exclude_regex/min_size_mb，保留 YAML 里手配的旧字段（prefer 等）不被抹掉
+      filters: { ...(editing?.filters ?? {}), ...(v.filters ?? {}) },
       skip_existing: v.skip_existing ?? true,
     };
     try {
@@ -248,19 +249,6 @@ export default function Subscriptions() {
           <Divider orientation="left" plain style={{ marginTop: 8 }}>
             高级过滤（可选）
           </Divider>
-          <Form.Item name={["filters", "resolutions"]} label="分辨率（命中其一）">
-            <Select
-              mode="tags"
-              placeholder="如 1080p、2160p；留空不限"
-              tokenSeparators={[",", " "]}
-            />
-          </Form.Item>
-          <Form.Item name={["filters", "include_keywords"]} label="必含关键词（全部命中）">
-            <Select mode="tags" placeholder="如 中字、内封" tokenSeparators={[",", " "]} />
-          </Form.Item>
-          <Form.Item name={["filters", "exclude_keywords"]} label="排除关键词（命中即丢弃）">
-            <Select mode="tags" placeholder="如 HDTV、枪版" tokenSeparators={[",", " "]} />
-          </Form.Item>
           <Form.Item
             name={["filters", "include_regex"]}
             label="包含（关键字 / 正则）"
@@ -275,23 +263,8 @@ export default function Subscriptions() {
           >
             <Input placeholder="如 720p|HDTV|预告；留空不排除" allowClear />
           </Form.Item>
-          <Space>
-            <Form.Item name={["filters", "min_size_mb"]} label="最小体积(MB)">
-              <InputNumber min={0} placeholder="不限" />
-            </Form.Item>
-            <Form.Item name={["filters", "max_size_mb"]} label="最大体积(MB)">
-              <InputNumber min={0} placeholder="不限" />
-            </Form.Item>
-          </Space>
-          <Form.Item
-            name={["filters", "prefer"]}
-            label="择优优先级（同一集多候选时靠前者优先）"
-          >
-            <Select
-              mode="tags"
-              placeholder="如 2160p、REMUX、内封"
-              tokenSeparators={[",", " "]}
-            />
+          <Form.Item name={["filters", "min_size_mb"]} label="最小体积(MB)">
+            <InputNumber min={0} placeholder="不限" />
           </Form.Item>
           <Form.Item
             name="skip_existing"
