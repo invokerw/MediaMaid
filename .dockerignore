@@ -1,0 +1,23 @@
+# 前端源码与依赖（镜像只需已提交的 mediamaid/web/static，无需 Node）
+mediamaid/web/frontend
+**/node_modules
+
+# Python / 构建产物
+.venv
+**/__pycache__
+*.pyc
+build
+dist
+*.egg-info
+
+# 本地数据 / 配置 / 文档无关
+demo
+config.yaml
+*.db
+.git
+.github
+tests
+deploy
+scripts
+*.md
+!README.md

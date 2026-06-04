@@ -153,8 +153,17 @@ class BarkNotifier(Notifier):
 **Docker**（编辑 `docker-compose.yml` 的挂载与 `config/config.yaml`）：
 
 ```bash
-docker compose up -d
+docker compose up -d          # 本地构建并启动
 ```
+
+**预构建镜像**：GitHub Actions（`.github/workflows/docker-publish.yml`）在 push `main` /
+打 `v*` tag 时自动构建多架构（amd64/arm64）镜像并发布到 GHCR。直接拉取：
+
+```bash
+docker pull ghcr.io/invokerw/mediamaid:latest
+```
+
+把 `docker-compose.yml` 里的 `build: .` 换成 `image: ghcr.io/invokerw/mediamaid:latest` 即可用预构建镜像。
 
 ### Docker 与目录（重要）
 
