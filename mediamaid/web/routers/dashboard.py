@@ -10,6 +10,7 @@ from starlette.concurrency import run_in_threadpool
 from ...pipeline import Pipeline, build_notify
 from ...subscribe import SubscribeRunner
 from ..deps import WebContext, get_ctx
+from ..logbuf import LOG_BUFFER
 from ..schemas import RecordIdsBody, RecordStatusBody, ScanBody
 from ..serializers import record_dict
 
@@ -30,6 +31,12 @@ def api_records(status: Optional[str] = None, ctx: WebContext = Depends(get_ctx)
     if status:
         rows = [r for r in rows if r.status == status]
     return {"records": [record_dict(r) for r in rows]}
+
+
+@router.get("/logs")
+def api_logs(limit: int = 200):
+    """返回进程内日志缓冲（通知器/流水线），最新在前。"""
+    return {"logs": LOG_BUFFER.tail(limit)}
 
 
 @router.post("/records/delete")

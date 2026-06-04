@@ -42,6 +42,13 @@ class NamingConfig(BaseModel):
     )
 
 
+class AuthConfig(BaseModel):
+    """Web 登录单账号。password_hash 为空时按默认口令 'admin' 校验（开箱即用）。"""
+
+    username: str = "admin"
+    password_hash: str = ""
+
+
 class PluginSpec(BaseModel):
     """一个被启用的插件实例：名字 + 该插件自己的配置块。"""
 
@@ -150,6 +157,8 @@ class Config(BaseModel):
 
     filters: FilterConfig = Field(default_factory=FilterConfig)
     naming: NamingConfig = Field(default_factory=NamingConfig)
+    # Web 登录账号（单账号）
+    auth: AuthConfig = Field(default_factory=AuthConfig)
 
     # 插件配置：类别 -> 该类别启用的插件实例列表
     # 类别取值见 plugins.base.CATEGORIES：scraper/subscriber/downloader/notifier

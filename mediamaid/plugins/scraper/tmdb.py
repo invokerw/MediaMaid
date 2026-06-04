@@ -108,6 +108,7 @@ class TMDBConfig(BaseModel):
 class TMDBScraper(Scraper):
     name = "tmdb"
     description = "TMDB 刮削器，匹配电影/剧集元数据，含进程内缓存与置信度评分"
+    builtin = True
     ConfigModel = TMDBConfig
 
     def __init__(self, config: TMDBConfig):

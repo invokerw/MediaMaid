@@ -11,6 +11,19 @@ class ScanBody(BaseModel):
     dry_run: bool = False
 
 
+class LoginBody(BaseModel):
+    username: str
+    password: str
+
+
+class AccountBody(BaseModel):
+    """修改登录账号：改用户名/密码需提供当前密码。"""
+
+    current_password: str
+    username: Optional[str] = None
+    password: Optional[str] = None
+
+
 class PluginBody(BaseModel):
     enabled: bool = True
     config: dict = {}

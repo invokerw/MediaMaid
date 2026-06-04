@@ -72,6 +72,7 @@ export default function Config() {
   );
 
   return (
+    <>
     <Form form={form} layout="vertical" onFinish={onFinish}>
       <Card size="small" title="路径">
         <Form.Item
@@ -223,5 +224,61 @@ export default function Config() {
         ]}
       />
     </Form>
+    <AccountCard />
+    </>
+  );
+}
+
+function AccountCard() {
+  const [form] = Form.useForm();
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    api.me().then((r) => form.setFieldsValue({ username: r.username })).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function onFinish(v: {
+    username?: string;
+    password?: string;
+    current_password: string;
+  }) {
+    setSaving(true);
+    try {
+      await api.updateAccount({
+        current_password: v.current_password,
+        username: v.username,
+        password: v.password || undefined,
+      });
+      message.success("账号已更新，下次登录生效");
+      form.setFieldsValue({ password: "", current_password: "" });
+    } catch (e) {
+      message.error(String(e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Card size="small" title="账号与安全" style={{ marginTop: 16 }}>
+      <Form form={form} layout="vertical" onFinish={onFinish}>
+        <Form.Item name="username" label="用户名" rules={[{ required: true }]}>
+          <Input style={{ maxWidth: 280 }} />
+        </Form.Item>
+        <Form.Item name="password" label="新密码（留空则不改）">
+          <Input.Password style={{ maxWidth: 280 }} placeholder="不改请留空" />
+        </Form.Item>
+        <Form.Item
+          name="current_password"
+          label="当前密码"
+          rules={[{ required: true, message: "修改账号需验证当前密码" }]}
+        >
+          <Input.Password style={{ maxWidth: 280 }} placeholder="默认 admin" />
+        </Form.Item>
+        <Button type="primary" htmlType="submit" loading={saving}>
+          更新账号
+        </Button>
+      </Form>
+    </Card>
   );
 }

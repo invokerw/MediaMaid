@@ -123,7 +123,7 @@ def delete_subscription(path: Path, sub_id: str) -> bool:
 
 
 # 嵌套对象类键，做 mapping 级合并而非整体替换
-_NESTED_KEYS = {"filters", "naming"}
+_NESTED_KEYS = {"filters", "naming", "auth"}
 
 
 def update_settings(path: Path, values: dict) -> None:

@@ -6,9 +6,10 @@ API 在 /api/* 下（见 routers/）；其余路径返回构建好的 index.html
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -16,8 +17,11 @@ from ..config import ConfigManager
 from ..logging_conf import get_logger
 from ..plugins import load_plugins
 from ..store import StateStore
+from . import auth as authmod
 from .deps import WebContext
+from .logbuf import LOG_BUFFER
 from .routers import (
+    auth,
     dashboard,
     downloads,
     files,
@@ -39,18 +43,31 @@ _NOT_BUILT = (
     "<pre>cd mediamaid/web/frontend && npm install && npm run build</pre></p>"
 )
 
-_ROUTERS = (dashboard, plugins, parsers, files, organize, settings, subscriptions, downloads)
+_ROUTERS = (auth, dashboard, plugins, parsers, files, organize, settings, subscriptions, downloads)
+
+# 这些 /api 路径无需登录即可访问
+_PUBLIC_API = {"/api/login"}
 
 
 def create_app(config_path: Path) -> FastAPI:
     config_path = Path(config_path)
     load_plugins()
+    # 通知/流水线日志进环形缓冲，供「日志」页展示
+    logging.getLogger("mediamaid").addHandler(LOG_BUFFER)
     # ConfigManager：按文件 mtime 自动热重载，处理器一律读 ctx.cfg()
     manager = ConfigManager(config_path)
     store = StateStore(manager.get().state_db)
 
     app = FastAPI(title="MediaMaid")
     app.state.ctx = WebContext(config_path=config_path, manager=manager, store=store)
+
+    @app.middleware("http")
+    async def _auth_guard(request: Request, call_next):
+        path = request.url.path
+        if path.startswith("/api/") and path not in _PUBLIC_API:
+            if not authmod.check_token(authmod.bearer_token(request.headers.get("authorization"))):
+                return JSONResponse({"detail": "未登录或登录已过期"}, status_code=401)
+        return await call_next(request)
 
     for module in _ROUTERS:
         app.include_router(module.router)

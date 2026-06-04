@@ -60,11 +60,16 @@ def build_notify(config: Config) -> Callable[[Event], None]:
 def build_notifiers(config: Config) -> List[Notifier]:
     load_plugins()
     notifiers: List[Notifier] = []
+    names = set()
     for spec in config.plugin_specs("notifier"):
         try:
             notifiers.append(create("notifier", spec.name, spec.config))
+            names.add(spec.name)
         except Exception as e:  # noqa: BLE001
             log.error("加载通知器 %s 失败: %s", spec.name, e)
+    # log 通知器内置常开（配置没显式启用也自动加上，保证「日志」页有内容）
+    if "log" not in names:
+        notifiers.insert(0, create("notifier", "log"))
     return notifiers
 
 

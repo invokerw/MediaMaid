@@ -30,9 +30,17 @@ export interface PluginEntry {
   name: string;
   description?: string;
   enabled: boolean;
+  builtin?: boolean;
   configured: boolean;
   config: Record<string, unknown>;
   schema: JsonSchema;
+}
+
+export interface LogEntry {
+  ts: number;
+  level: string;
+  logger: string;
+  message: string;
 }
 export interface PluginCategory {
   category: string;
@@ -214,19 +222,48 @@ export interface ManualOrganizeBody {
   category?: string | null; // tv / anime
 }
 
+// ---- 登录 token（localStorage） ----
+const TOKEN_KEY = "mm_token";
+export const getToken = () => localStorage.getItem(TOKEN_KEY) || "";
+export const setToken = (t: string) => localStorage.setItem(TOKEN_KEY, t);
+export const clearToken = () => localStorage.removeItem(TOKEN_KEY);
+// 401 时由 App 注册回调（跳登录页）
+let onUnauthorized: (() => void) | null = null;
+export const setOnUnauthorized = (fn: () => void) => {
+  onUnauthorized = fn;
+};
+
+function authHeaders(extra?: Record<string, string>): Record<string, string> {
+  const h: Record<string, string> = { ...(extra || {}) };
+  const t = getToken();
+  if (t) h["Authorization"] = `Bearer ${t}`;
+  return h;
+}
+
+function handle401(status: number) {
+  if (status === 401) {
+    clearToken();
+    onUnauthorized?.();
+  }
+}
+
 async function get<T>(url: string): Promise<T> {
-  const r = await fetch(url);
-  if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+  const r = await fetch(url, { headers: authHeaders() });
+  if (!r.ok) {
+    handle401(r.status);
+    throw new Error(`${r.status} ${r.statusText}`);
+  }
   return r.json();
 }
 
 async function send<T>(method: string, url: string, body?: unknown): Promise<T> {
   const r = await fetch(url, {
     method,
-    headers: { "Content-Type": "application/json" },
+    headers: authHeaders({ "Content-Type": "application/json" }),
     body: body ? JSON.stringify(body) : undefined,
   });
   if (!r.ok) {
+    handle401(r.status);
     let detail = `${r.status} ${r.statusText}`;
     try {
       const j = await r.json();
@@ -243,6 +280,16 @@ const post = <T>(url: string, body?: unknown) => send<T>("POST", url, body);
 const put = <T>(url: string, body?: unknown) => send<T>("PUT", url, body);
 
 export const api = {
+  login: (username: string, password: string) =>
+    post<{ token: string; username: string }>("/api/login", { username, password }),
+  logout: () => post<{ ok: boolean }>("/api/logout"),
+  me: () => get<{ username: string }>("/api/me"),
+  updateAccount: (body: {
+    current_password: string;
+    username?: string;
+    password?: string;
+  }) => put<{ username: string }>("/api/account", body),
+  logs: (limit = 200) => get<{ logs: LogEntry[] }>(`/api/logs?limit=${limit}`),
   dashboard: () => get<Dashboard>("/api/dashboard"),
   records: (status?: string) =>
     get<{ records: RecordRow[] }>(

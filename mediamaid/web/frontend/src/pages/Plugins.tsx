@@ -15,9 +15,6 @@ const CATEGORY_LABEL: Record<string, string> = {
   mediaserver: "媒体服务器",
 };
 
-// 内置类别：固定启用、不可关闭（以「内置」标识替代开关）
-const BUILTIN_CATEGORIES = ["scraper", "parser"];
-
 export default function Plugins() {
   const [categories, setCategories] = useState<PluginCategory[]>([]);
   const [modal, setModal] = useState<{ category: string; entry: PluginEntry } | null>(null);
@@ -78,7 +75,7 @@ export default function Plugins() {
     <>
       <Paragraph type="secondary">
         切换开关启停插件；点「配置」编辑参数。改动会写回 config.yaml 并即时生效。
-        刮削器（TMDB）与解析器（guessit）为内置，始终启用、不可关闭。
+        刮削器（TMDB）、解析器（guessit）、日志通知器（log）为内置，始终启用、不可关闭。
       </Paragraph>
       <Space direction="vertical" size="large" style={{ width: "100%" }}>
         {categories.map((cat) => (
@@ -104,9 +101,9 @@ export default function Plugins() {
                           {e.enabled && <Tag color="success">已启用</Tag>}
                         </Space>
                       }
-                      // 内置类别（tmdb/guessit）不可关闭——以「内置」标识替代启停开关
+                      // 内置插件（tmdb/guessit/log）不可关闭——以「内置」标识替代启停开关
                       extra={
-                        BUILTIN_CATEGORIES.includes(cat.category) ? (
+                        e.builtin ? (
                           <Tag>内置</Tag>
                         ) : (
                           <Switch

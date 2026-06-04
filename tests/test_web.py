@@ -9,6 +9,14 @@ from mediamaid.web import create_app
 BIG = b"0" * (60 * 1024 * 1024)
 
 
+def _authed(app, username="admin", password="admin"):
+    """建 TestClient 并登录，默认带上 Bearer token。"""
+    c = TestClient(app)
+    tok = c.post("/api/login", json={"username": username, "password": password}).json()["token"]
+    c.headers.update({"Authorization": f"Bearer {tok}"})
+    return c
+
+
 @pytest.fixture
 def client(tmp_path):
     src = tmp_path / "downloads"
@@ -26,8 +34,7 @@ def client(tmp_path):
         ),
         encoding="utf-8",
     )
-    app = create_app(cfg_path)
-    return TestClient(app), tmp_path
+    return _authed(create_app(cfg_path)), tmp_path
 
 
 def test_dashboard_api(client):
@@ -36,6 +43,48 @@ def test_dashboard_api(client):
     assert r.status_code == 200
     body = r.json()
     assert "counts" in body and "records" in body
+
+
+def test_auth_required_and_login(client):
+    c, _ = client
+    # 无 token → 401
+    noauth = TestClient(c.app)
+    assert noauth.get("/api/dashboard").status_code == 401
+    # 错密码 → 401
+    assert noauth.post("/api/login", json={"username": "admin", "password": "x"}).status_code == 401
+    # 正确登录 → 拿 token 后可访问
+    tok = noauth.post("/api/login", json={"username": "admin", "password": "admin"}).json()["token"]
+    noauth.headers.update({"Authorization": f"Bearer {tok}"})
+    assert noauth.get("/api/dashboard").status_code == 200
+    assert noauth.get("/api/me").json()["username"] == "admin"
+
+
+def test_change_account(client):
+    c, _ = client
+    # 当前密码错 → 403
+    assert c.put("/api/account", json={"current_password": "wrong", "password": "newpass"}).status_code == 403
+    # 改密码
+    assert c.put("/api/account", json={"current_password": "admin", "password": "newpass"}).status_code == 200
+    fresh = TestClient(c.app)
+    # 旧密码失效、新密码可登录
+    assert fresh.post("/api/login", json={"username": "admin", "password": "admin"}).status_code == 401
+    assert fresh.post("/api/login", json={"username": "admin", "password": "newpass"}).status_code == 200
+
+
+def test_logs_endpoint(client):
+    c, _ = client
+    r = c.get("/api/logs")
+    assert r.status_code == 200 and "logs" in r.json()
+
+
+def test_log_notifier_is_builtin(client):
+    c, _ = client
+    cats = {cat["category"]: cat for cat in c.get("/api/plugins").json()["categories"]}
+    log = next(e for e in cats["notifier"]["entries"] if e["name"] == "log")
+    assert log["builtin"] is True and log["enabled"] is True
+    # 请求停用也强制保持启用
+    r = c.put("/api/plugins/notifier/log", json={"enabled": False, "config": {}})
+    assert r.status_code == 200 and r.json()["enabled"] is True
 
 
 def test_plugins_api_lists_builtins(client):
@@ -94,7 +143,7 @@ def test_failed_dir_root_and_manual_scope(tmp_path):
         }),
         encoding="utf-8",
     )
-    c = TestClient(create_app(cfg_path))
+    c = _authed(create_app(cfg_path))
 
     # 根选择器含「失败: …」
     roots = c.get("/api/files/roots").json()["roots"]

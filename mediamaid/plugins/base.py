@@ -33,6 +33,8 @@ class Plugin(ABC):
     name: str = ""
     description: str = ""
     hidden: bool = False
+    # builtin=True 的插件为内置：始终启用、不可在 Web 关闭（如 tmdb/guessit/log）
+    builtin: bool = False
     ConfigModel: Type[BaseModel] = EmptyConfig
 
     def __init__(self, config: BaseModel):

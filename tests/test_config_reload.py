@@ -43,4 +43,5 @@ def test_pipeline_reload_rebuilds(tmp_path):
 
     _write(cfg_path, plugins={})
     pipe.reload(load_config(cfg_path))
-    assert pipe.notifiers == []
+    # log 通知器内置常开：清空配置后仍保留 log
+    assert [n.name for n in pipe.notifiers] == ["log"]
