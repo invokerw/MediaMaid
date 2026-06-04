@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -19,9 +20,23 @@ router = APIRouter(prefix="/api")
 
 @router.get("/dashboard")
 def api_dashboard(ctx: WebContext = Depends(get_ctx)):
+    config = ctx.cfg()
+    # 失败目录积压数
+    failed_dir, failed_count = None, 0
+    if config.failed_dir is not None:
+        failed_dir = str(config.failed_dir)
+        fd = Path(config.failed_dir)
+        if fd.is_dir():
+            failed_count = sum(1 for p in fd.rglob("*") if p.is_file())
+    # 健康：是否配了 TMDB key
+    spec = next((s for s in config.plugins.get("scraper", []) if s.name == "tmdb"), None)
+    tmdb_key = bool(str((spec.config.get("api_key") if spec else "") or "").strip())
     return {
         "counts": ctx.store.counts(),
         "records": [record_dict(r) for r in ctx.store.recent(10)],
+        "failed": {"dir": failed_dir, "count": failed_count},
+        "health": {"tmdb_key": tmdb_key, "action": config.action.value},
+        "subscriptions": len(config.subscriptions),
     }
 
 

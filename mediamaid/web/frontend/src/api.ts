@@ -14,6 +14,9 @@ export interface RecordRow {
 export interface Dashboard {
   counts: Record<string, number>;
   records: RecordRow[];
+  failed?: { dir: string | null; count: number };
+  health?: { tmdb_key: boolean; action: string };
+  subscriptions?: number;
 }
 
 export interface JsonSchemaProp {

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Row,
   Col,
@@ -9,6 +10,8 @@ import {
   Table,
   Tag,
   Tooltip,
+  Alert,
+  Typography,
   message,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
@@ -21,10 +24,14 @@ import {
   MinusCircleOutlined,
   CloseCircleOutlined,
   DatabaseOutlined,
+  WarningOutlined,
+  DownloadOutlined,
 } from "@ant-design/icons";
-import { api, Dashboard as DashboardData, ScanResult } from "../api";
+import { api, Dashboard as DashboardData, ScanResult, LogEntry } from "../api";
 import RecordsTable from "../components/RecordsTable";
 import { ELLIPSIS, ellipsisCell } from "../components/EllipsisCell";
+
+const LOG_COLOR: Record<string, string> = { ERROR: "#f85149", WARNING: "#d4a72c" };
 
 const STATUS_COLOR: Record<string, string> = {
   done: "success",
@@ -62,17 +69,24 @@ const scanColumns: ColumnsType<ScanItem> = [
 ];
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [scan, setScan] = useState<ScanResult | null>(null);
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [dlCount, setDlCount] = useState<number | null>(null);
 
-  const load = () =>
+  const load = () => {
     api
       .dashboard()
       .then(setData)
       .catch((e) => message.error(String(e)))
       .finally(() => setLoading(false));
+    api.logs(8).then((d) => setLogs(d.logs)).catch(() => {});
+    // 下载任务数为尽力而为（需连下载器，失败忽略）
+    api.downloads().then((d) => setDlCount(d.tasks.length)).catch(() => setDlCount(null));
+  };
 
   useEffect(() => {
     load();
@@ -110,18 +124,45 @@ export default function Dashboard() {
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
 
   const stats = [
-    { label: "总处理", key: "__total", value: total, color: "#4ea1ff", icon: <DatabaseOutlined /> },
-    { label: "已整理", key: "done", value: counts.done ?? 0, color: "#3fb950", icon: <CheckCircleOutlined /> },
-    { label: "跳过", key: "skipped", value: counts.skipped ?? 0, color: "#d4a72c", icon: <MinusCircleOutlined /> },
-    { label: "失败", key: "failed", value: counts.failed ?? 0, color: "#f85149", icon: <CloseCircleOutlined /> },
+    { label: "总处理", value: total, color: "#4ea1ff", icon: <DatabaseOutlined />, to: "/records" },
+    { label: "已整理", value: counts.done ?? 0, color: "#3fb950", icon: <CheckCircleOutlined />, to: "/records?status=done" },
+    { label: "跳过", value: counts.skipped ?? 0, color: "#d4a72c", icon: <MinusCircleOutlined />, to: "/records?status=skipped" },
+    { label: "失败", value: counts.failed ?? 0, color: "#f85149", icon: <CloseCircleOutlined />, to: "/records?status=failed" },
+    { label: "订阅", value: data?.subscriptions ?? 0, color: "#a371f7", icon: <CloudDownloadOutlined />, to: "/subscriptions" },
+    { label: "下载任务", value: dlCount ?? "-", color: "#4ea1ff", icon: <DownloadOutlined />, to: "/downloads" },
   ];
+
+  const noKey = data?.health && data.health.tmdb_key === false;
+  const backlog = data?.failed && data.failed.count > 0;
 
   return (
     <Space direction="vertical" size="large" style={{ width: "100%" }}>
+      {(noKey || backlog) && (
+        <Space direction="vertical" size="small" style={{ width: "100%" }}>
+          {noKey && (
+            <Alert
+              type="error"
+              showIcon
+              icon={<WarningOutlined />}
+              message="未配置 TMDB API Key——扫描整理会直接报错。请到「插件」页填写。"
+              action={<Button size="small" onClick={() => navigate("/plugins")}>去配置</Button>}
+            />
+          )}
+          {backlog && (
+            <Alert
+              type="warning"
+              showIcon
+              message={`有 ${data!.failed!.count} 个文件转移/识别失败被隔离，待人工处理。`}
+              action={<Button size="small" onClick={() => navigate("/files")}>去文件页</Button>}
+            />
+          )}
+        </Space>
+      )}
+
       <Row gutter={[16, 16]}>
         {stats.map((s) => (
-          <Col key={s.key} xs={12} sm={6}>
-            <Card hoverable>
+          <Col key={s.label} xs={12} sm={8} md={4}>
+            <Card hoverable onClick={() => navigate(s.to)} style={{ cursor: "pointer" }}>
               <Statistic
                 title={s.label}
                 value={s.value}
@@ -200,6 +241,27 @@ export default function Dashboard() {
           />
         </Card>
       )}
+
+      <Card
+        title="最近日志"
+        size="small"
+        extra={<Button type="link" size="small" onClick={() => navigate("/logs")}>查看全部</Button>}
+      >
+        {logs.length === 0 ? (
+          <Typography.Text type="secondary">暂无日志</Typography.Text>
+        ) : (
+          <div className="mono" style={{ fontSize: 13, lineHeight: 1.9 }}>
+            {logs.map((l, i) => (
+              <div key={i} style={{ color: LOG_COLOR[l.level] }}>
+                <Typography.Text type="secondary">
+                  {new Date(l.ts * 1000).toLocaleTimeString()}
+                </Typography.Text>{" "}
+                [{l.level}] {l.message}
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
 
       <Card title="最近记录" size="small">
         <RecordsTable records={data?.records ?? []} loading={loading} />
