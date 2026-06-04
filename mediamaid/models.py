@@ -31,6 +31,8 @@ class MediaItem:
     year: Optional[int] = None
     season: Optional[int] = None
     episode: Optional[int] = None
+    # 命中 TMDB 绑定规则时携带，刮削阶段据此直查（绕过搜索）
+    tmdb_id: Optional[int] = None
     # 分类：剧集可为 "tv" / "anime"，决定落地到 TV/ 还是 Anime/ 目录。
     # 在识别阶段判定（见 identify.py），落地阶段直接消费，避免分类规则与落地耦合。
     category: str = "tv"
@@ -85,6 +87,10 @@ class ParseResult:
     year: Optional[int] = None
     season: Optional[int] = None
     episode: Optional[int] = None
+    # TMDB 绑定规则命中时直接给出 tmdb_id（跳过按标题搜索）
+    tmdb_id: Optional[int] = None
+    # 分类覆盖（"tv"/"anime"）；None 表示由 Identifier 按路径关键词判定
+    category: Optional[str] = None
     raw: dict = field(default_factory=dict)
 
 

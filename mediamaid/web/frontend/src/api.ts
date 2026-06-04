@@ -90,18 +90,31 @@ export interface SubscriberType {
   schema: JsonSchema;
 }
 
-export interface ParserRow {
-  id: string;
-  name: string;
-  parser: string;
-  enabled: boolean;
-  config: Record<string, unknown>;
+export interface IgnoreEpisodesRow {
+  season: number;
+  episodes: number[];
 }
+
+export interface TmdbRuleRow {
+  id: string;
+  tmdb_id: number;
+  title: string;
+  media_type: string; // movie / episode
+  category: string; // tv / anime
+  enabled: boolean;
+  patterns: string[];
+  season: number | null;
+  ignore_seasons: number[];
+  ignore_episodes: IgnoreEpisodesRow[];
+}
+
+export type TmdbRuleBody = Omit<TmdbRuleRow, "id">;
 
 export interface ParseTestResult {
   matched: string | null;
   type?: string;
   title?: string;
+  tmdb_id?: number | null;
   year?: number | null;
   season?: number | null;
   episode?: number | null;
@@ -293,17 +306,11 @@ export const api = {
     get<{ path: string; parent: string; dirs: { name: string; path: string }[]; error: string | null }>(
       "/api/fs" + (path ? `?path=${encodeURIComponent(path)}` : "")
     ),
-  parserTypes: () => get<{ parsers: SubscriberType[] }>("/api/parsers/types"),
-  parsers: () => get<{ parsers: ParserRow[] }>("/api/parsers"),
-  createParser: (body: {
-    name: string;
-    parser: string;
-    enabled: boolean;
-    config: Record<string, unknown>;
-  }) => post<ParserRow>("/api/parsers", body),
-  updateParser: (id: string, body: Partial<ParserRow>) =>
-    put<ParserRow>(`/api/parsers/${id}`, body),
-  deleteParser: (id: string) => send<{ ok: boolean }>("DELETE", `/api/parsers/${id}`),
+  tmdbRules: () => get<{ rules: TmdbRuleRow[] }>("/api/tmdb-rules"),
+  createTmdbRule: (body: TmdbRuleBody) => post<TmdbRuleRow>("/api/tmdb-rules", body),
+  updateTmdbRule: (id: string, body: Partial<TmdbRuleBody>) =>
+    put<TmdbRuleRow>(`/api/tmdb-rules/${id}`, body),
+  deleteTmdbRule: (id: string) => send<{ ok: boolean }>("DELETE", `/api/tmdb-rules/${id}`),
   parseTest: (name: string) => post<ParseTestResult>("/api/parse/test", { name }),
   parseTestDir: (path: string) =>
     post<{ results: (ParseTestResult & { name: string; path: string })[] }>(

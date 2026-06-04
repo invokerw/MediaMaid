@@ -194,6 +194,9 @@ class TMDBScraper(Scraper):
         return False, "TMDB 连接失败：请检查 API key 或网络"
 
     def scrape(self, item: MediaItem) -> Optional[MediaInfo]:
+        # 命中 TMDB 绑定规则：已知 tmdb_id，直查详情跳过搜索
+        if item.tmdb_id:
+            return self.fetch_by_id(item.media_type, item.tmdb_id, item.season, item.episode)
         if item.media_type == MediaType.MOVIE:
             return self._scrape_movie(item)
         if item.media_type == MediaType.EPISODE:

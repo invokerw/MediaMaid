@@ -79,3 +79,21 @@ plugins:
   #   - name: qbittorrent
   #     # save_path 建议指向上面的 source_dirs，下载完成即被监控整理（闭环衔接）
   #     config: {host: localhost, port: 8080, username: admin, password: adminadmin, category: mediamaid, save_path: /data/downloads}
+
+# TMDB 规则（取代旧的顺序正则解析器）：
+#   - 绑定：文件名命中 patterns 任一 → 直接钉到 tmdb_id（跳过按标题搜索），
+#     季/集由 season 或正则组 (?P<season>)(?P<episode>) 提供；标题来自 TMDB。
+#   - 忽略：ignore_seasons / ignore_episodes 命中则不整理（绑定与自动匹配都适用）。
+#   未命中任何规则的文件，仍由内置 guessit 解析后按标题搜索。
+# tmdb_rules:
+#   - id: shoutian
+#     tmdb_id: 207468            # 在 themoviedb.org 该条目 URL 里取数字 ID
+#     title: 遮天                 # 仅展示用
+#     media_type: episode        # movie / episode
+#     category: anime            # tv / anime
+#     patterns:
+#       - '\]\[(?P<title>[^\]]*遮天[^\]]*)\].*\[(?P<episode>\d+)\]'
+#     season: 1                  # 固定季号；留空则用正则的 (?P<season>)
+#     ignore_seasons: [0]        # 例：忽略 specials
+#     ignore_episodes:
+#       - {season: 1, episodes: [13, 14]}

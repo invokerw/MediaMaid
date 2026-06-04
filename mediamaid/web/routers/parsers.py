@@ -1,4 +1,4 @@
-"""解析器链（按序尝试）CRUD 与解析测试。"""
+"""TMDB 规则（绑定 + 忽略）CRUD 与解析测试。"""
 
 from __future__ import annotations
 
@@ -7,21 +7,21 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import ValidationError
 
+from ...config import TmdbRule
 from ...identify import Identifier
-from ...plugins import available, get as get_plugin
 from .. import cfgio
 from ..deps import WebContext, get_ctx, safe_path
-from ..schemas import DeleteBody, ParserBody, ParserUpdate, ParseTestBody
-from ..serializers import parser_dict
+from ..schemas import DeleteBody, ParseTestBody, TmdbRuleBody, TmdbRuleUpdate
+from ..serializers import tmdb_rule_dict
 
 router = APIRouter(prefix="/api")
 
 
-def _find_parser(ctx: WebContext, pid: str):
-    p = next((x for x in ctx.cfg().parsers if x.id == pid), None)
-    if p is None:
-        raise HTTPException(404, f"解析器不存在: {pid}")
-    return p
+def _find_rule(ctx: WebContext, rid: str):
+    r = next((x for x in ctx.cfg().tmdb_rules if x.id == rid), None)
+    if r is None:
+        raise HTTPException(404, f"规则不存在: {rid}")
+    return r
 
 
 def _parse_one(ident: Identifier, name: str) -> dict:
@@ -33,66 +33,49 @@ def _parse_one(ident: Identifier, name: str) -> dict:
         "matched": matched,
         "type": res.type.value,
         "title": res.title,
+        "tmdb_id": res.tmdb_id,
         "year": res.year,
         "season": res.season,
         "episode": res.episode,
     }
 
 
-@router.get("/parsers/types")
-def api_parser_types():
-    out = []
-    for name in available("parser"):
-        cls = get_plugin("parser", name)
-        out.append({"name": name, "schema": cls.ConfigModel.model_json_schema()})
-    return {"parsers": out}
+@router.get("/tmdb-rules")
+def api_rules(ctx: WebContext = Depends(get_ctx)):
+    return {"rules": [tmdb_rule_dict(r) for r in ctx.cfg().tmdb_rules]}
 
 
-@router.get("/parsers")
-def api_parsers(ctx: WebContext = Depends(get_ctx)):
-    return {"parsers": [parser_dict(p) for p in ctx.cfg().parsers]}
-
-
-@router.post("/parsers")
-def api_parser_create(body: ParserBody, ctx: WebContext = Depends(get_ctx)):
+@router.post("/tmdb-rules")
+def api_rule_create(body: TmdbRuleBody, ctx: WebContext = Depends(get_ctx)):
+    rid = uuid.uuid4().hex[:8]
+    item = {"id": rid, **body.model_dump()}
     try:
-        cls = get_plugin("parser", body.parser)
-    except KeyError:
-        raise HTTPException(404, f"未知解析器: {body.parser}")
-    try:
-        cls.ConfigModel.model_validate(body.config)
+        TmdbRule.model_validate(item)
     except ValidationError as e:
         raise HTTPException(422, e.errors())
-    pid = uuid.uuid4().hex[:8]
-    cfgio.add_list_item(ctx.config_path, "parsers", {
-        "id": pid, "name": body.name, "parser": body.parser,
-        "enabled": body.enabled, "config": body.config,
-    })
+    cfgio.add_list_item(ctx.config_path, "tmdb_rules", item)
     ctx.manager.reload()
-    return parser_dict(_find_parser(ctx, pid))
+    return tmdb_rule_dict(_find_rule(ctx, rid))
 
 
-@router.put("/parsers/{pid}")
-def api_parser_update(pid: str, body: ParserUpdate, ctx: WebContext = Depends(get_ctx)):
-    p = _find_parser(ctx, pid)
-    parser = body.parser or p.parser
-    config = body.config if body.config is not None else p.config
+@router.put("/tmdb-rules/{rid}")
+def api_rule_update(rid: str, body: TmdbRuleUpdate, ctx: WebContext = Depends(get_ctx)):
+    r = _find_rule(ctx, rid)
+    fields = body.model_dump(exclude_none=True)
+    merged = {**tmdb_rule_dict(r), **fields}
     try:
-        cls = get_plugin("parser", parser)
-        cls.ConfigModel.model_validate(config)
-    except KeyError:
-        raise HTTPException(404, f"未知解析器: {parser}")
+        TmdbRule.model_validate(merged)
     except ValidationError as e:
         raise HTTPException(422, e.errors())
-    cfgio.update_list_item(ctx.config_path, "parsers", pid, body.model_dump(exclude_none=True))
+    cfgio.update_list_item(ctx.config_path, "tmdb_rules", rid, fields)
     ctx.manager.reload()
-    return parser_dict(_find_parser(ctx, pid))
+    return tmdb_rule_dict(_find_rule(ctx, rid))
 
 
-@router.delete("/parsers/{pid}")
-def api_parser_delete(pid: str, ctx: WebContext = Depends(get_ctx)):
-    _find_parser(ctx, pid)
-    cfgio.delete_list_item(ctx.config_path, "parsers", pid)
+@router.delete("/tmdb-rules/{rid}")
+def api_rule_delete(rid: str, ctx: WebContext = Depends(get_ctx)):
+    _find_rule(ctx, rid)
+    cfgio.delete_list_item(ctx.config_path, "tmdb_rules", rid)
     ctx.manager.reload()
     return {"ok": True}
 

@@ -343,35 +343,38 @@ def _make_feed(tmp_path):
     return feed
 
 
-def test_parser_types_and_crud_and_test(client):
+def test_tmdb_rules_crud_and_binding_test(client):
     c, _ = client
-    # 类型含 regex/guessit
-    types = {t["name"] for t in c.get("/api/parsers/types").json()["parsers"]}
-    assert {"regex", "guessit"} <= types
+    # 缺 tmdb_id → 422
+    assert c.post("/api/tmdb-rules", json={"media_type": "episode"}).status_code == 422
 
-    # 缺 pattern → 422
-    assert c.post(
-        "/api/parsers", json={"name": "x", "parser": "regex", "config": {}}
-    ).status_code == 422
-
-    # 添加正则解析器（字幕组遮天）
-    pat = r"\]\[(?P<title>[^\]]*遮天[^\]]*)\]"
-    pid = c.post(
-        "/api/parsers",
-        json={"name": "遮天", "parser": "regex", "config": {"pattern": pat, "type": "episode"}},
+    # 添加绑定规则（字幕组遮天 → 钉到 tmdb_id）
+    pat = r"\]\[(?P<title>[^\]]*遮天[^\]]*)\].*\[(?P<episode>\d+)\]"
+    rid = c.post(
+        "/api/tmdb-rules",
+        json={
+            "tmdb_id": 207468, "title": "遮天", "media_type": "episode",
+            "category": "anime", "patterns": [pat], "season": 1,
+            "ignore_episodes": [{"season": 1, "episodes": [13]}],
+        },
     ).json()["id"]
-    assert any(p["id"] == pid for p in c.get("/api/parsers").json()["parsers"])
+    rules = c.get("/api/tmdb-rules").json()["rules"]
+    assert any(r["id"] == rid and r["tmdb_id"] == 207468 for r in rules)
 
-    # 解析测试：字幕组命名能解析出标题
+    # 解析测试：命中绑定 → 返回 tmdb_id + 季集（标题留空）
     r = c.post(
         "/api/parse/test",
         json={"name": "[GM-Team][国漫][遮天][Shrouding the Heavens][2023][162].mkv"},
     ).json()
-    assert r["matched"] == "regex"
-    assert r["title"] == "遮天"
+    assert r["matched"] == "tmdb-binding"
+    assert r["tmdb_id"] == 207468 and r["season"] == 1 and r["episode"] == 162
+
+    # 部分更新：停用
+    assert c.put(f"/api/tmdb-rules/{rid}", json={"enabled": False}).status_code == 200
+    assert c.get("/api/tmdb-rules").json()["rules"][0]["enabled"] is False
 
     # 删除
-    assert c.delete(f"/api/parsers/{pid}").status_code == 200
+    assert c.delete(f"/api/tmdb-rules/{rid}").status_code == 200
 
 
 def test_parse_test_dir(client, tmp_path):

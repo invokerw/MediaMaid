@@ -1,40 +1,83 @@
 """识别：遍历源目录，用解析器链把文件名解析为 MediaItem。
 
-解析器是插件（plugins/parser）。识别链按 config.parsers 顺序尝试，首个解析出
-标题者胜出；链为空时回退内置 guessit，保持现有行为。
+链首是 TMDB 绑定解析器（命中规则正则 → 直接钉到某 tmdb_id），其后是内置 guessit
+兜底（按标题解析，留给后续 TMDB 搜索）。
 """
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Iterator, List, Optional
 
-from .config import Config, FilterConfig
+from .config import Config, FilterConfig, TmdbRule
 from .logging_conf import get_logger
-from .models import MediaItem, MediaType
+from .models import MediaItem, MediaType, ParseResult
 from .plugins import Parser, create, load_plugins
 
 log = get_logger(__name__)
 
 
-def build_parsers(config: Config) -> List[Parser]:
-    """按 config.parsers 顺序构建解析器链。
+def _to_int(v) -> Optional[int]:
+    if v is None:
+        return None
+    m = re.search(r"\d+", str(v))
+    return int(m.group()) if m else None
 
-    自定义解析器按序在前；guessit 始终作为最后兜底（用户未显式配置 guessit 时自动追加），
-    这样加了正则解析器也不会让普通命名失去通用解析。
+
+class TmdbBindingParser:
+    """TMDB 绑定解析器：命中规则的某个正则 → 直接产出带 tmdb_id 的 ParseResult。
+
+    不走 registry（由 config.tmdb_rules 构造，非用户可插拔的插件实例），鸭子类型即可。
     """
+
+    name = "tmdb-binding"
+
+    def __init__(self, rules: List[TmdbRule]):
+        # 预编译每条规则的正则（非法的跳过并告警）
+        self._compiled = []
+        for rule in rules:
+            pats = []
+            for p in rule.patterns:
+                try:
+                    pats.append(re.compile(p))
+                except re.error as e:
+                    log.error("TMDB 规则 %s 正则编译失败 %r: %s", rule.tmdb_id, p, e)
+            if pats:
+                self._compiled.append((rule, pats))
+
+    def parse(self, name: str) -> Optional[ParseResult]:
+        for rule, pats in self._compiled:
+            for rx in pats:
+                m = rx.search(name)
+                if not m:
+                    continue
+                groups = m.groupdict()
+                mt = MediaType.MOVIE if rule.media_type == "movie" else MediaType.EPISODE
+                season = rule.season if rule.season is not None else _to_int(groups.get("season"))
+                episode = _to_int(groups.get("episode"))
+                if mt == MediaType.EPISODE and season is None and episode is not None:
+                    season = 1
+                return ParseResult(
+                    type=mt,
+                    title="",  # 标题来自 TMDB（fetch_by_id），此处留空
+                    tmdb_id=rule.tmdb_id,
+                    season=season,
+                    episode=episode,
+                    category=rule.category,
+                    raw=groups,
+                )
+        return None
+
+
+def build_parsers(config: Config):
+    """构建解析器链：TMDB 绑定解析器（若有规则）在前，guessit 兜底在后。"""
     load_plugins()
-    chain: List[Parser] = []
-    has_guessit = False
-    for spec in config.enabled_parsers():
-        try:
-            chain.append(create("parser", spec.parser, spec.config))
-            if spec.parser == "guessit":
-                has_guessit = True
-        except Exception as e:  # noqa: BLE001
-            log.error("加载解析器 %s(%s) 失败: %s", spec.name, spec.parser, e)
-    if not has_guessit:
-        chain.append(create("parser", "guessit"))
+    chain = []
+    rules = [r for r in config.enabled_tmdb_rules() if r.patterns]
+    if rules:
+        chain.append(TmdbBindingParser(rules))
+    chain.append(create("parser", "guessit"))
     return chain
 
 
@@ -74,7 +117,8 @@ class Identifier:
             except Exception as e:  # noqa: BLE001
                 log.warning("解析器 %s 异常 %s: %s", parser.name, name, e)
                 continue
-            if res is not None and res.title:
+            # 接受：解析出标题，或绑定规则给出了 tmdb_id（标题留给 TMDB）
+            if res is not None and (res.title or res.tmdb_id):
                 return res, parser.name
         return None, None
 
@@ -98,7 +142,9 @@ class Identifier:
             year=res.year,
             season=res.season,
             episode=res.episode,
-            category=self._category(path),
+            tmdb_id=res.tmdb_id,
+            # 绑定规则可指定分类（tv/anime）；否则按源路径关键词判定
+            category=res.category or self._category(path),
             raw=res.raw,
         )
 

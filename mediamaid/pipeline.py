@@ -243,6 +243,12 @@ class Pipeline:
         # 刮削（失败不致命，降级为仅文件名）；override_info 非空时直接用它（手动转移）
         info = override_info if override_info is not None else self._scrape(item)
 
+        # TMDB 规则忽略：已知 tmdb_id（绑定或自动匹配）的某些季/集不整理
+        tmdb_id = info.tmdb_id if info else item.tmdb_id
+        if tmdb_id and self.config.is_ignored(tmdb_id, item.season, item.episode):
+            log.info("被 TMDB 规则忽略，跳过: %s", item.source.name)
+            return Result(item, "skipped", error="被 TMDB 规则忽略")
+
         try:
             plan = self.organizer.plan(item, info)
             dest = self.organizer.execute(plan, dry_run=dry_run)

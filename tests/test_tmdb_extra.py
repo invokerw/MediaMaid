@@ -87,6 +87,25 @@ def test_fetch_by_id_episode(monkeypatch):
     scraper.close()
 
 
+def test_scrape_routes_by_tmdb_id(monkeypatch):
+    """item.tmdb_id 存在时 scrape 应走 fetch_by_id（直查），不做搜索。"""
+    scraper = TMDBScraper(TMDBConfig(api_key="x"))
+    calls = []
+
+    def fake_get(path, **params):
+        calls.append(path)
+        if path == "/movie/603":
+            return {"title": "黑客帝国", "release_date": "1999-03-30", "genres": []}
+        return None
+
+    monkeypatch.setattr(scraper, "_get", fake_get)
+    item = MediaItem(source=Path("x.mkv"), media_type=MediaType.MOVIE, title="", tmdb_id=603)
+    info = scraper.scrape(item)
+    assert info.tmdb_id == 603 and info.title == "黑客帝国"
+    assert "/search/movie" not in calls  # 未走搜索
+    scraper.close()
+
+
 def test_fetch_by_id_not_found(monkeypatch):
     scraper = TMDBScraper(TMDBConfig(api_key="x"))
     monkeypatch.setattr(scraper, "_get", lambda *a, **k: None)

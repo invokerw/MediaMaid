@@ -66,18 +66,37 @@ class SubscriptionUpdate(BaseModel):
     skip_existing: Optional[bool] = None
 
 
-class ParserBody(BaseModel):
-    name: str
-    parser: str
+class IgnoreEpisodesBody(BaseModel):
+    season: int
+    episodes: List[int] = []
+
+
+class TmdbRuleBody(BaseModel):
+    """新建/全量编辑一条 TMDB 规则。"""
+
+    tmdb_id: int
+    title: str = ""
+    media_type: str = "episode"  # movie / episode
+    category: str = "tv"  # tv / anime
     enabled: bool = True
-    config: dict = {}
+    patterns: List[str] = []
+    season: Optional[int] = None
+    ignore_seasons: List[int] = []
+    ignore_episodes: List[IgnoreEpisodesBody] = []
 
 
-class ParserUpdate(BaseModel):
-    name: Optional[str] = None
-    parser: Optional[str] = None
+class TmdbRuleUpdate(BaseModel):
+    """部分更新一条 TMDB 规则；仅提交的字段被改。"""
+
+    tmdb_id: Optional[int] = None
+    title: Optional[str] = None
+    media_type: Optional[str] = None
+    category: Optional[str] = None
     enabled: Optional[bool] = None
-    config: Optional[dict] = None
+    patterns: Optional[List[str]] = None
+    season: Optional[int] = None
+    ignore_seasons: Optional[List[int]] = None
+    ignore_episodes: Optional[List[IgnoreEpisodesBody]] = None
 
 
 class ParseTestBody(BaseModel):

@@ -18,7 +18,7 @@ import Config from "./pages/Config";
 import Subscriptions from "./pages/Subscriptions";
 import Downloads from "./pages/Downloads";
 import Files from "./pages/Files";
-import Parsers from "./pages/Parsers";
+import TmdbRules from "./pages/TmdbRules";
 
 const { Header, Content, Sider } = Layout;
 
@@ -27,7 +27,7 @@ const items = [
   { key: "/subscriptions", icon: <CloudDownloadOutlined />, label: "订阅" },
   { key: "/downloads", icon: <DownloadOutlined />, label: "下载" },
   { key: "/files", icon: <FolderOpenOutlined />, label: "文件" },
-  { key: "/parsers", icon: <FilterOutlined />, label: "解析器" },
+  { key: "/tmdb-rules", icon: <FilterOutlined />, label: "TMDB 规则" },
   { key: "/records", icon: <UnorderedListOutlined />, label: "记录" },
   { key: "/plugins", icon: <ApiOutlined />, label: "插件" },
   { key: "/config", icon: <SettingOutlined />, label: "配置" },
@@ -38,7 +38,7 @@ const TITLES: Record<string, string> = {
   "/subscriptions": "订阅资源",
   "/downloads": "下载任务",
   "/files": "文件管理",
-  "/parsers": "解析器",
+  "/tmdb-rules": "TMDB 规则",
   "/records": "处理记录",
   "/plugins": "插件",
   "/config": "配置",
@@ -74,7 +74,7 @@ export default function App() {
               <Route path="/subscriptions" element={<Subscriptions />} />
               <Route path="/downloads" element={<Downloads />} />
               <Route path="/files" element={<Files />} />
-              <Route path="/parsers" element={<Parsers />} />
+              <Route path="/tmdb-rules" element={<TmdbRules />} />
               <Route path="/records" element={<Records />} />
               <Route path="/plugins" element={<Plugins />} />
               <Route path="/config" element={<Config />} />

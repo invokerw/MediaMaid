@@ -171,6 +171,28 @@ def test_organize_manual_conflict_restores_old(tmp_path):
         assert b_dest.read_bytes() == b"occupied"
 
 
+def test_tmdb_rule_ignore_skips(tmp_path):
+    """命中绑定规则得到 tmdb_id，且该季集被 ignore → 整理时跳过不落地。"""
+    from mediamaid.config import IgnoreEpisodes, TmdbRule
+
+    cfg = _make_config(tmp_path)
+    cfg.tmdb_rules = [
+        TmdbRule(
+            id="r1", tmdb_id=42, media_type="episode",
+            patterns=[r"FANSUB.*?(?P<episode>\d+)"], season=1,
+            ignore_episodes=[IgnoreEpisodes(season=1, episodes=[13])],
+        )
+    ]
+    src = cfg.source_dirs[0]
+    (src / "FANSUB - 13.mkv").write_bytes(b"0" * (60 * 1024 * 1024))  # 被忽略
+    (src / "FANSUB - 14.mkv").write_bytes(b"0" * (60 * 1024 * 1024))  # 不忽略
+
+    with StateStore(cfg.state_db) as store:
+        results = {r.item.source.name: r.status for r in Pipeline(cfg, store).scan()}
+    assert results["FANSUB - 13.mkv"] == "skipped"
+    assert results["FANSUB - 14.mkv"] == "done"
+
+
 def test_dedup_skips_second_run(tmp_path):
     cfg = _make_config(tmp_path)
     src = cfg.source_dirs[0]

@@ -88,14 +88,34 @@ class Subscription(BaseModel):
     skip_existing: bool = True
 
 
-class ParserSpec(BaseModel):
-    """一条命名解析器：选定某解析器类型并提供其参数。链中按序尝试。"""
+class IgnoreEpisodes(BaseModel):
+    """某 TMDB 条目下，某一季里要忽略的具体集号。"""
+
+    season: int
+    episodes: List[int] = Field(default_factory=list)
+
+
+class TmdbRule(BaseModel):
+    """一条 TMDB 规则：把命中正则的文件钉到某个 tmdb_id，并/或忽略其某些季集。
+
+    - patterns 命中 → 直接绑定到 tmdb_id（跳过按标题搜索），季/集由 season 或正则组提供。
+    - ignore_seasons / ignore_episodes → 该 tmdb_id 命中时不整理（绑定与自动匹配都适用）。
+    两者皆可独立存在：只填 patterns（纯绑定）、只填 ignore（纯过滤）、或两者兼有。
+    """
 
     id: str
-    name: str
-    parser: str  # 解析器类型名，如 "regex" / "guessit"
+    tmdb_id: int
+    title: str = ""  # 显示标签（从 TMDB 拉来缓存，仅 UI 展示）
+    media_type: str = "episode"  # movie / episode
+    category: str = "tv"  # tv / anime（剧集落地目录）
     enabled: bool = True
-    config: Dict = Field(default_factory=dict)
+    # 绑定：命中任一正则 → 钉到此 tmdb_id；正则可含 (?P<season>)(?P<episode>)
+    patterns: List[str] = Field(default_factory=list)
+    # 固定季号；为空则用正则的 (?P<season>)，仍无则剧集默认第 1 季
+    season: Optional[int] = None
+    # 忽略：整季 / 按季忽略具体集
+    ignore_seasons: List[int] = Field(default_factory=list)
+    ignore_episodes: List[IgnoreEpisodes] = Field(default_factory=list)
 
 
 class Config(BaseModel):
@@ -140,8 +160,9 @@ class Config(BaseModel):
     # 订阅条目：每条选一个订阅器类型 + 参数（取代 plugins.subscriber 的运行角色）
     subscriptions: List[Subscription] = Field(default_factory=list)
 
-    # 解析器链：按序尝试，首个解析出标题者胜出；为空时回退内置 guessit
-    parsers: List[ParserSpec] = Field(default_factory=list)
+    # TMDB 规则：正则命中 → 直接绑定到某 tmdb_id；并可忽略其某些季集。
+    # 取代旧的「顺序正则解析器」；未命中规则的文件仍由内置 guessit 解析后按标题搜索。
+    tmdb_rules: List[TmdbRule] = Field(default_factory=list)
 
     def plugin_specs(self, category: str) -> List[PluginSpec]:
         """返回某类别下 enabled 的插件实例配置。"""
@@ -150,8 +171,22 @@ class Config(BaseModel):
     def enabled_subscriptions(self) -> List[Subscription]:
         return [s for s in self.subscriptions if s.enabled]
 
-    def enabled_parsers(self) -> List[ParserSpec]:
-        return [p for p in self.parsers if p.enabled]
+    def enabled_tmdb_rules(self) -> List[TmdbRule]:
+        return [r for r in self.tmdb_rules if r.enabled]
+
+    def is_ignored(
+        self, tmdb_id: int, season: Optional[int], episode: Optional[int]
+    ) -> bool:
+        """该 tmdb_id 的 (season, episode) 是否被某条启用规则忽略。"""
+        for r in self.tmdb_rules:
+            if not r.enabled or r.tmdb_id != tmdb_id:
+                continue
+            if season is not None and season in r.ignore_seasons:
+                return True
+            for ie in r.ignore_episodes:
+                if ie.season == season and episode is not None and episode in ie.episodes:
+                    return True
+        return False
 
 
 def load_config(path: Path) -> Config:

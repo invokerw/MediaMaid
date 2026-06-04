@@ -115,11 +115,17 @@ def download_task_dict(task) -> dict:
     }
 
 
-def parser_dict(p) -> dict:
+def tmdb_rule_dict(r) -> dict:
+    """把 TmdbRule 序列化为前端视图。"""
     return {
-        "id": p.id,
-        "name": p.name,
-        "parser": p.parser,
-        "enabled": p.enabled,
-        "config": dict(p.config),
+        "id": r.id,
+        "tmdb_id": r.tmdb_id,
+        "title": r.title,
+        "media_type": r.media_type,
+        "category": r.category,
+        "enabled": r.enabled,
+        "patterns": list(r.patterns),
+        "season": r.season,
+        "ignore_seasons": list(r.ignore_seasons),
+        "ignore_episodes": [{"season": ie.season, "episodes": list(ie.episodes)} for ie in r.ignore_episodes],
     }
