@@ -1,9 +1,8 @@
 name: Build and publish Docker image
 
-# 触发：push 到 main、打 v* tag、或手动
+# 触发：仅在打 v* tag 时构建发布；也可手动触发
 on:
   push:
-    branches: [main]
     tags: ["v*"]
   workflow_dispatch:
 
@@ -39,13 +38,11 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          # push main → latest + main-<sha>；打 v1.2.3 → 1.2.3 / 1.2 / latest
+          # 打 v1.2.3 → 1.2.3 / 1.2 / latest；手动触发 → latest
           tags: |
-            type=ref,event=branch
-            type=sha,prefix=main-,enable={{is_default_branch}}
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest
 
       - name: Build and push
         uses: docker/build-push-action@v6
