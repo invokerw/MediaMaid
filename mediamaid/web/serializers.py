@@ -41,7 +41,6 @@ def settings_dict(config: Config) -> dict:
         "filters": {
             "video_extensions": config.filters.video_extensions,
             "min_size_mb": config.filters.min_size_mb,
-            "exclude_keywords": config.filters.exclude_keywords,
         },
         "naming": {
             "movie": config.naming.movie,

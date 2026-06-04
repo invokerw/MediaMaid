@@ -56,7 +56,6 @@ export interface Settings {
   filters: {
     video_extensions: string[];
     min_size_mb: number;
-    exclude_keywords: string[];
   };
   naming: {
     movie: string;

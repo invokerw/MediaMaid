@@ -37,7 +37,6 @@ scan_workers: 4
 filters:
   video_extensions: [mkv, mp4, avi, ts, m2ts, mov, wmv, flv, iso]
   min_size_mb: 50
-  exclude_keywords: [sample, trailer, 预告]
 
 naming:
   # 可用占位符: {title} {show} {year} {season} {episode} {episode_title} {ext}

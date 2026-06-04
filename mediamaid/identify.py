@@ -86,7 +86,6 @@ class Identifier:
         self.config = config
         self.filters: FilterConfig = config.filters
         self._exts = {e.lower().lstrip(".") for e in self.filters.video_extensions}
-        self._exclude = [k.lower() for k in self.filters.exclude_keywords]
         self._anime_keywords = [k.lower() for k in config.anime_keywords if k]
         self.parsers = build_parsers(config)
 
@@ -95,10 +94,6 @@ class Identifier:
         if not path.is_file():
             return False
         if path.suffix.lstrip(".").lower() not in self._exts:
-            return False
-        name = path.name.lower()
-        if any(k in name for k in self._exclude):
-            log.debug("跳过(关键词命中): %s", path.name)
             return False
         try:
             size_mb = path.stat().st_size / (1024 * 1024)

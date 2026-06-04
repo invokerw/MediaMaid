@@ -145,7 +145,6 @@ class OrganizeManualBody(BaseModel):
 class FiltersBody(BaseModel):
     video_extensions: Optional[List[str]] = None
     min_size_mb: Optional[int] = None
-    exclude_keywords: Optional[List[str]] = None
 
 
 class NamingBody(BaseModel):

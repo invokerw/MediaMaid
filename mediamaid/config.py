@@ -18,8 +18,6 @@ class FilterConfig(BaseModel):
     )
     # 小于该体积(MB)的文件忽略（过滤 sample / 垃圾文件）
     min_size_mb: int = 50
-    # 文件名包含这些关键词则跳过（不区分大小写）
-    exclude_keywords: List[str] = Field(default=["sample", "trailer", "预告"])
 
 
 class NamingConfig(BaseModel):

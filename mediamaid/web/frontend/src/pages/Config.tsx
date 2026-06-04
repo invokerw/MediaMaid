@@ -179,9 +179,6 @@ export default function Config() {
         <Form.Item name={["filters", "min_size_mb"]} label="最小体积（MB）">
           <InputNumber min={0} style={{ width: "100%" }} />
         </Form.Item>
-        <Form.Item name={["filters", "exclude_keywords"]} label="排除关键词">
-          {tags("sample")}
-        </Form.Item>
         <Form.Item
           name="anime_keywords"
           label="动漫归类关键词"
