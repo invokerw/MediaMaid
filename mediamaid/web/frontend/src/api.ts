@@ -111,16 +111,6 @@ export interface TmdbRuleRow {
 
 export type TmdbRuleBody = Omit<TmdbRuleRow, "id">;
 
-export interface ParseTestResult {
-  matched: string | null;
-  type?: string;
-  title?: string;
-  tmdb_id?: number | null;
-  year?: number | null;
-  season?: number | null;
-  episode?: number | null;
-}
-
 export interface SubscriptionFilter {
   resolutions: string[];
   include_keywords: string[];
@@ -312,12 +302,10 @@ export const api = {
   updateTmdbRule: (id: string, body: Partial<TmdbRuleBody>) =>
     put<TmdbRuleRow>(`/api/tmdb-rules/${id}`, body),
   deleteTmdbRule: (id: string) => send<{ ok: boolean }>("DELETE", `/api/tmdb-rules/${id}`),
-  parseTest: (name: string) => post<ParseTestResult>("/api/parse/test", { name }),
-  parseTestDir: (path: string) =>
-    post<{ results: (ParseTestResult & { name: string; path: string })[] }>(
-      "/api/parse/test-dir",
-      { path }
-    ),
+  deleteRecords: (ids: number[]) =>
+    post<{ deleted: number }>("/api/records/delete", { ids }),
+  setRecordsStatus: (ids: number[], status: string) =>
+    post<{ updated: number }>("/api/records/status", { ids, status }),
   subscriberTypes: () => get<{ subscribers: SubscriberType[] }>("/api/subscribers"),
   subscriptions: () => get<{ subscriptions: SubscriptionRow[] }>("/api/subscriptions"),
   createSubscription: (body: {

@@ -25,9 +25,13 @@ const columns: ColumnsType<RecordRow> = [
 export default function RecordsTable({
   records,
   loading,
+  selectedRowKeys,
+  onSelectionChange,
 }: {
   records: RecordRow[];
   loading?: boolean;
+  selectedRowKeys?: number[];
+  onSelectionChange?: (keys: number[]) => void;
 }) {
   return (
     <Table
@@ -36,6 +40,14 @@ export default function RecordsTable({
       columns={columns}
       dataSource={records}
       loading={loading}
+      rowSelection={
+        onSelectionChange
+          ? {
+              selectedRowKeys,
+              onChange: (keys) => onSelectionChange(keys as number[]),
+            }
+          : undefined
+      }
       pagination={records.length > 20 ? { pageSize: 20 } : false}
     />
   );

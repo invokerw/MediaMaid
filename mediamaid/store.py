@@ -229,6 +229,26 @@ class StateStore:
         self.conn.execute("DELETE FROM processed WHERE id=?", (record_id,))
         self.conn.commit()
 
+    def delete_many(self, ids: List[int]) -> int:
+        """批量删除记录，返回删除条数。"""
+        if not ids:
+            return 0
+        ph = ",".join("?" * len(ids))
+        cur = self.conn.execute(f"DELETE FROM processed WHERE id IN ({ph})", list(ids))
+        self.conn.commit()
+        return cur.rowcount
+
+    def set_status(self, ids: List[int], status: str) -> int:
+        """批量修改记录状态，返回受影响条数。"""
+        if not ids:
+            return 0
+        ph = ",".join("?" * len(ids))
+        cur = self.conn.execute(
+            f"UPDATE processed SET status=? WHERE id IN ({ph})", [status, *ids]
+        )
+        self.conn.commit()
+        return cur.rowcount
+
     def done_record(self, src: Path) -> Optional[Record]:
         """取该源文件最新的 done 记录（按路径匹配），无则 None。供撤销复用。"""
         cur = self.conn.execute(

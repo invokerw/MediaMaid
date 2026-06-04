@@ -377,12 +377,11 @@ def _make_feed(tmp_path):
     return feed
 
 
-def test_tmdb_rules_crud_and_binding_test(client):
+def test_tmdb_rules_crud(client):
     c, _ = client
     # 缺 tmdb_id → 422
     assert c.post("/api/tmdb-rules", json={"media_type": "episode"}).status_code == 422
 
-    # 添加绑定规则（字幕组遮天 → 钉到 tmdb_id）
     pat = r"\]\[(?P<title>[^\]]*遮天[^\]]*)\].*\[(?P<episode>\d+)\]"
     rid = c.post(
         "/api/tmdb-rules",
@@ -395,40 +394,44 @@ def test_tmdb_rules_crud_and_binding_test(client):
     rules = c.get("/api/tmdb-rules").json()["rules"]
     assert any(r["id"] == rid and r["tmdb_id"] == 207468 for r in rules)
 
-    # 解析测试：命中绑定 → 返回 tmdb_id + 季集（标题留空）
-    r = c.post(
-        "/api/parse/test",
-        json={"name": "[GM-Team][国漫][遮天][Shrouding the Heavens][2023][162].mkv"},
-    ).json()
-    assert r["matched"] == "tmdb-binding"
-    assert r["tmdb_id"] == 207468 and r["season"] == 1 and r["episode"] == 162
-
-    # 部分更新：停用
     assert c.put(f"/api/tmdb-rules/{rid}", json={"enabled": False}).status_code == 200
     assert c.get("/api/tmdb-rules").json()["rules"][0]["enabled"] is False
-
-    # 删除
     assert c.delete(f"/api/tmdb-rules/{rid}").status_code == 200
 
 
-def test_parse_test_dir(client, tmp_path):
+def test_records_batch_delete_and_status(client):
+    c, tmp_path = client
+    from mediamaid.store import StateStore
+    from pathlib import Path
+    db = tmp_path / "s.db"
+    with StateStore(db) as store:
+        store.record(Path("/x/a.mkv"), Path("/lib/a.mkv"), "hardlink", "failed")
+        store.record(Path("/x/b.mkv"), Path("/lib/b.mkv"), "hardlink", "skipped")
+    ids = [r["id"] for r in c.get("/api/records").json()["records"]]
+    assert len(ids) == 2
+
+    # 批量改状态
+    r = c.post("/api/records/status", json={"ids": ids, "status": "done"})
+    assert r.status_code == 200 and r.json()["updated"] == 2
+    assert all(x["status"] == "done" for x in c.get("/api/records").json()["records"])
+    # 非法状态 → 422
+    assert c.post("/api/records/status", json={"ids": ids, "status": "x"}).status_code == 422
+
+    # 批量删除
+    r = c.post("/api/records/delete", json={"ids": ids})
+    assert r.status_code == 200 and r.json()["deleted"] == 2
+    assert c.get("/api/records").json()["records"] == []
+
+
+def test_parser_is_builtin(client):
     c, _ = client
-    # 模拟一个合集文件夹：一个种子下了好几集
-    src = tmp_path / "downloads"
-    pack = src / "Some.Show.S01.Complete"
-    pack.mkdir()
-    (pack / "Some.Show.S01E01.1080p.mkv").write_bytes(b"0" * (60 * 1024 * 1024))
-    (pack / "Some.Show.S01E02.1080p.mkv").write_bytes(b"0" * (60 * 1024 * 1024))
-
-    r = c.post("/api/parse/test-dir", json={"path": str(pack)})
-    assert r.status_code == 200
-    results = r.json()["results"]
-    # 合集里每个文件都被单独解析为剧集
-    eps = sorted(x["episode"] for x in results if x["matched"])
-    assert eps == [1, 2]
-
-    # 越界目录 → 403
-    assert c.post("/api/parse/test-dir", json={"path": "/etc"}).status_code == 403
+    # guessit 在插件列表中恒为启用
+    cats = {cat["category"]: cat for cat in c.get("/api/plugins").json()["categories"]}
+    guessit = next(e for e in cats["parser"]["entries"] if e["name"] == "guessit")
+    assert guessit["enabled"] is True
+    # 请求停用也强制保持启用
+    r = c.put("/api/plugins/parser/guessit", json={"enabled": False, "config": {}})
+    assert r.status_code == 200 and r.json()["enabled"] is True
 
 
 def test_subscribers_types_have_schema(client):

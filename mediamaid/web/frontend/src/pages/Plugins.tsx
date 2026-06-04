@@ -8,11 +8,15 @@ const { Paragraph, Text } = Typography;
 
 const CATEGORY_LABEL: Record<string, string> = {
   scraper: "刮削器",
+  parser: "解析器",
   subscriber: "订阅器",
   downloader: "下载器",
   notifier: "通知器",
   mediaserver: "媒体服务器",
 };
+
+// 内置类别：固定启用、不可关闭（以「内置」标识替代开关）
+const BUILTIN_CATEGORIES = ["scraper", "parser"];
 
 export default function Plugins() {
   const [categories, setCategories] = useState<PluginCategory[]>([]);
@@ -74,7 +78,7 @@ export default function Plugins() {
     <>
       <Paragraph type="secondary">
         切换开关启停插件；点「配置」编辑参数。改动会写回 config.yaml 并即时生效。
-        刮削器固定使用 TMDB（始终启用、不可关闭），仅需填写 API Key。
+        刮削器（TMDB）与解析器（guessit）为内置，始终启用、不可关闭。
       </Paragraph>
       <Space direction="vertical" size="large" style={{ width: "100%" }}>
         {categories.map((cat) => (
@@ -100,9 +104,9 @@ export default function Plugins() {
                           {e.enabled && <Tag color="success">已启用</Tag>}
                         </Space>
                       }
-                      // 刮削器固定为 TMDB，不可关闭——以「内置」标识替代启停开关
+                      // 内置类别（tmdb/guessit）不可关闭——以「内置」标识替代启停开关
                       extra={
-                        cat.category === "scraper" ? (
+                        BUILTIN_CATEGORIES.includes(cat.category) ? (
                           <Tag>内置</Tag>
                         ) : (
                           <Switch

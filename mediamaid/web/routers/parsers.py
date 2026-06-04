@@ -1,4 +1,4 @@
-"""TMDB 规则（绑定 + 忽略）CRUD 与解析测试。"""
+"""TMDB 规则（绑定 + 忽略）CRUD。"""
 
 from __future__ import annotations
 
@@ -8,10 +8,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import ValidationError
 
 from ...config import TmdbRule
-from ...identify import Identifier
 from .. import cfgio
-from ..deps import WebContext, get_ctx, safe_path
-from ..schemas import DeleteBody, ParseTestBody, TmdbRuleBody, TmdbRuleUpdate
+from ..deps import WebContext, get_ctx
+from ..schemas import TmdbRuleBody, TmdbRuleUpdate
 from ..serializers import tmdb_rule_dict
 
 router = APIRouter(prefix="/api")
@@ -22,22 +21,6 @@ def _find_rule(ctx: WebContext, rid: str):
     if r is None:
         raise HTTPException(404, f"规则不存在: {rid}")
     return r
-
-
-def _parse_one(ident: Identifier, name: str) -> dict:
-    res, matched = ident.parse_name(name)
-    if res is None:
-        return {"name": name, "matched": None}
-    return {
-        "name": name,
-        "matched": matched,
-        "type": res.type.value,
-        "title": res.title,
-        "tmdb_id": res.tmdb_id,
-        "year": res.year,
-        "season": res.season,
-        "episode": res.episode,
-    }
 
 
 @router.get("/tmdb-rules")
@@ -78,26 +61,3 @@ def api_rule_delete(rid: str, ctx: WebContext = Depends(get_ctx)):
     cfgio.delete_list_item(ctx.config_path, "tmdb_rules", rid)
     ctx.manager.reload()
     return {"ok": True}
-
-
-@router.post("/parse/test")
-def api_parse_test(body: ParseTestBody, ctx: WebContext = Depends(get_ctx)):
-    # 对单个文件名测试解析（解析的是文件名，不是种子标题）
-    return _parse_one(Identifier(ctx.cfg()), body.name)
-
-
-@router.post("/parse/test-dir")
-def api_parse_test_dir(body: DeleteBody, limit: int = 300, ctx: WebContext = Depends(get_ctx)):
-    """对某目录下真实下载的文件逐个测试解析（合集文件夹会递归到每个文件）。"""
-    base = safe_path(ctx, body.path)
-    if not base.is_dir():
-        raise HTTPException(400, "不是目录")
-    ident = Identifier(ctx.cfg())
-    results = []
-    for p in sorted(base.rglob("*")):
-        if not ident.accept_file(p):
-            continue
-        results.append({**_parse_one(ident, p.name), "path": str(p)})
-        if len(results) >= limit:
-            break
-    return {"results": results}

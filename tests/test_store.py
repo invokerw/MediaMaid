@@ -34,6 +34,23 @@ def test_done_record_and_done_for(tmp_path):
         assert store.done_for([]) == {}
 
 
+def test_delete_many_and_set_status(tmp_path):
+    with StateStore(tmp_path / "s.db") as store:
+        for i in range(3):
+            store.record(tmp_path / f"{i}.mkv", tmp_path / f"lib/{i}.mkv", "copy", "failed")
+        ids = [r.id for r in store.recent()]
+        assert len(ids) == 3
+        # 改状态
+        assert store.set_status(ids[:2], "done") == 2
+        statuses = {r.id: r.status for r in store.recent()}
+        assert statuses[ids[0]] == "done" and statuses[ids[2]] == "failed"
+        # 批量删除
+        assert store.delete_many(ids[:2]) == 2
+        assert len(store.recent()) == 1
+        # 空入参安全
+        assert store.delete_many([]) == 0 and store.set_status([], "done") == 0
+
+
 def test_recent_and_batch(tmp_path):
     src = tmp_path / "a.mkv"
     src.write_bytes(b"x" * 100)

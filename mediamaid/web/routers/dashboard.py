@@ -10,7 +10,7 @@ from starlette.concurrency import run_in_threadpool
 from ...pipeline import Pipeline, build_notify
 from ...subscribe import SubscribeRunner
 from ..deps import WebContext, get_ctx
-from ..schemas import ScanBody
+from ..schemas import RecordIdsBody, RecordStatusBody, ScanBody
 from ..serializers import record_dict
 
 router = APIRouter(prefix="/api")
@@ -30,6 +30,22 @@ def api_records(status: Optional[str] = None, ctx: WebContext = Depends(get_ctx)
     if status:
         rows = [r for r in rows if r.status == status]
     return {"records": [record_dict(r) for r in rows]}
+
+
+@router.post("/records/delete")
+def api_records_delete(body: RecordIdsBody, ctx: WebContext = Depends(get_ctx)):
+    """批量删除记录。注意：删除 done 记录会解除去重，该源文件下次扫描会被重新整理。"""
+    n = ctx.store.delete_many(body.ids)
+    return {"deleted": n}
+
+
+@router.post("/records/status")
+def api_records_status(body: RecordStatusBody, ctx: WebContext = Depends(get_ctx)):
+    """批量修改记录状态。"""
+    if body.status not in ("done", "skipped", "failed"):
+        raise HTTPException(422, "status 必须是 done / skipped / failed")
+    n = ctx.store.set_status(body.ids, body.status)
+    return {"updated": n}
 
 
 @router.post("/scan")

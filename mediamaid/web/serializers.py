@@ -58,8 +58,8 @@ def plugin_entry(config: Config, category: str, name: str) -> dict:
     """组装单个插件的 UI 信息：启停 + 当前配置 + 配置 schema。"""
     spec = next((s for s in config.plugins.get(category, []) if s.name == name), None)
     cls = get_plugin(category, name)
-    # 刮削器固定为 TMDB，始终启用、不可关闭
-    enabled = True if category == "scraper" else (bool(spec.enabled) if spec else False)
+    # 内置类别（刮削器 tmdb / 解析器 guessit）：始终启用、不可关闭
+    enabled = True if category in ("scraper", "parser") else (bool(spec.enabled) if spec else False)
     return {
         "name": name,
         "description": cls.description,

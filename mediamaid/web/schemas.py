@@ -99,8 +99,13 @@ class TmdbRuleUpdate(BaseModel):
     ignore_episodes: Optional[List[IgnoreEpisodesBody]] = None
 
 
-class ParseTestBody(BaseModel):
-    name: str
+class RecordIdsBody(BaseModel):
+    ids: List[int] = []
+
+
+class RecordStatusBody(BaseModel):
+    ids: List[int] = []
+    status: str  # done / skipped / failed
 
 
 class NewDownloadBody(BaseModel):
