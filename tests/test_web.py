@@ -76,6 +76,40 @@ def test_organize_identify_without_key(client):
     assert body["parsed"]["title"] == "The Matrix"
 
 
+def test_failed_dir_root_and_manual_scope(tmp_path):
+    # 配了 failed_dir 的独立 app
+    src = tmp_path / "downloads"
+    src.mkdir()
+    failed = tmp_path / "failed"
+    failed.mkdir()
+    (failed / "Boom.2020.1080p.mkv").write_bytes(BIG)
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text(
+        yaml.safe_dump({
+            "source_dirs": [str(src)],
+            "library_dir": str(tmp_path / "media"),
+            "failed_dir": str(failed),
+            "state_db": str(tmp_path / "s.db"),
+            "plugins": {},
+        }),
+        encoding="utf-8",
+    )
+    c = TestClient(create_app(cfg_path))
+
+    # 根选择器含「失败: …」
+    roots = c.get("/api/files/roots").json()["roots"]
+    assert any(r["label"].startswith("失败") for r in roots)
+
+    # 失败目录中的文件可识别（_source_path 放行），无 key 仅解析
+    r = c.post("/api/organize/identify",
+               json={"path": str(failed / "Boom.2020.1080p.mkv")})
+    assert r.status_code == 200 and r.json()["parsed"]["title"] == "Boom"
+
+    # 媒体库内文件仍被拒
+    r2 = c.post("/api/organize/identify", json={"path": str(tmp_path / "media" / "x.mkv")})
+    assert r2.status_code in (400, 404)
+
+
 def test_organize_manual_rejects_library_path(client):
     c, tmp_path = client
     lib_file = str(tmp_path / "media" / "x.mkv")  # 媒体库内 → 拒绝

@@ -80,9 +80,12 @@ export default function Files() {
   } | null>(null);
   const [manual, setManual] = useState<FileEntry | null>(null);
 
+  // 源目录与失败目录都展示识别信息/操作（失败目录用于人工修复）
   function isSourceRoot(p: string, rootsList = roots): boolean {
     return rootsList.some(
-      (r) => r.label.startsWith("源目录") && (p === r.path || p.startsWith(r.path + "/"))
+      (r) =>
+        (r.label.startsWith("源目录") || r.label.startsWith("失败")) &&
+        (p === r.path || p.startsWith(r.path + "/"))
     );
   }
 

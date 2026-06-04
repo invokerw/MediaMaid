@@ -7,6 +7,10 @@ source_dirs:
 # 媒体库根目录
 library_dir: /data/media
 
+# 转移失败目录（可选）：整理失败的文件移此隔离，扫描/监控不再自动重试。
+# 留空则失败文件留在原地。建议放在 source_dirs 之外。可在 Web 文件页用「手动转移」修复。
+# failed_dir: /data/failed
+
 # 落地方式: hardlink（默认，跨盘自动回退复制） / copy / move
 action: hardlink
 

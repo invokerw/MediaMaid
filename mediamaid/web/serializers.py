@@ -27,6 +27,7 @@ def settings_dict(config: Config) -> dict:
     return {
         "source_dirs": [str(p) for p in config.source_dirs],
         "library_dir": str(config.library_dir),
+        "failed_dir": str(config.failed_dir) if config.failed_dir else "",
         "action": config.action.value,
         "on_conflict": config.on_conflict,
         "stable_seconds": config.stable_seconds,

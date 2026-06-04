@@ -42,6 +42,7 @@ export interface PluginCategory {
 export interface Settings {
   source_dirs: string[];
   library_dir: string;
+  failed_dir: string;
   action: string;
   on_conflict: string;
   stable_seconds: number;

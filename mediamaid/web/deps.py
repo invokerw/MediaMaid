@@ -69,8 +69,11 @@ def get_ctx(request: Request) -> WebContext:
 # ---- 受管路径安全（仅允许操作源目录 / 媒体库范围内）----
 def managed_roots(ctx: WebContext) -> List[Path]:
     config = ctx.cfg()
+    roots = list(config.source_dirs) + [config.library_dir]
+    if config.failed_dir is not None:
+        roots.append(config.failed_dir)
     out: List[Path] = []
-    for r in list(config.source_dirs) + [config.library_dir]:
+    for r in roots:
         try:
             out.append(Path(r).resolve())
         except OSError:

@@ -89,6 +89,13 @@ export default function Config() {
         <Form.Item name="library_dir" label="媒体库根目录" rules={[{ required: true }]}>
           <PathInput placeholder="/data/media" />
         </Form.Item>
+        <Form.Item
+          name="failed_dir"
+          label="转移失败目录（可选）"
+          tooltip="整理/识别失败的文件移此隔离，扫描与监控不再自动重试；可在「文件」页用「手动转移」修复。留空则不启用。建议放在源目录之外。"
+        >
+          <PathInput placeholder="留空=不启用，如 /data/failed" />
+        </Form.Item>
         <Button icon={<LinkOutlined />} loading={checking} onClick={checkHardlink}>
           检测硬链接可用性
         </Button>

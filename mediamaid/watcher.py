@@ -48,6 +48,9 @@ class Watcher:
         self._observer = Observer()
 
     def _on_candidate(self, path: Path) -> None:
+        # 失败目录里的文件不自动处理（失败目录若位于某源目录内）
+        if self.config.under_failed(path):
+            return
         try:
             size = path.stat().st_size
         except OSError:

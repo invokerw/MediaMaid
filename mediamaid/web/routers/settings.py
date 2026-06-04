@@ -32,6 +32,9 @@ def api_settings_get(ctx: WebContext = Depends(get_ctx)):
 @router.put("/settings")
 def api_settings_put(body: SettingsBody, ctx: WebContext = Depends(get_ctx)):
     values = body.model_dump(exclude_none=True)
+    # failed_dir 留空表示不修改（清空请直接编辑 yaml），避免写入空字符串被当成 Path(".")
+    if values.get("failed_dir") == "":
+        values.pop("failed_dir")
     # 校验：把当前 yaml 与提交值合并后整体校验
     try:
         with ctx.config_path.open("r", encoding="utf-8") as f:

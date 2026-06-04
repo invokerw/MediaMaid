@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shutil
 import threading
 from dataclasses import dataclass
 from pathlib import Path
@@ -135,6 +136,31 @@ class Pipeline:
     def scrape(self, item: MediaItem) -> Optional[MediaInfo]:
         return self._scrape(item)
 
+    def _move_to_failed(self, src: Path) -> Optional[Path]:
+        """把转移失败的源文件移入失败目录隔离。未配置或移动失败返回 None。
+
+        目标重名则追加 (1)、(2)… 避免覆盖；移动本身失败仅告警不抛。
+        """
+        if self.config.failed_dir is None:
+            return None
+        src = Path(src)
+        if not src.exists():
+            return None
+        failed = Path(self.config.failed_dir)
+        try:
+            failed.mkdir(parents=True, exist_ok=True)
+            dest = failed / src.name
+            i = 1
+            while dest.exists():
+                dest = failed / f"{src.stem} ({i}){src.suffix}"
+                i += 1
+            shutil.move(str(src), str(dest))
+            log.info("转移失败，已隔离到失败目录: %s -> %s", src.name, dest)
+            return dest
+        except OSError as e:
+            log.error("移入失败目录失败 %s: %s", src, e)
+            return None
+
     def _remove_target(self, dst: Path) -> None:
         """删除一个落地目标文件，并向上清理变空的父目录（到媒体库根为止）。"""
         try:
@@ -211,6 +237,12 @@ class Pipeline:
         override_info: Optional[MediaInfo] = None,
     ) -> Result:
         if item.media_type == MediaType.UNKNOWN:
+            # 识别失败（类型未知）：配了失败目录则隔离，否则保持跳过
+            if not dry_run and self.config.failed_dir is not None:
+                moved = self._move_to_failed(item.source)
+                if self.store:
+                    self.store.record(item.source, moved, None, "failed", "未知媒体类型", batch_id)
+                return Result(item, "failed", error="unknown type")
             log.warning("未知媒体类型，跳过: %s", item.source.name)
             return Result(item, "skipped", error="unknown type")
 
@@ -254,9 +286,11 @@ class Pipeline:
             dest = self.organizer.execute(plan, dry_run=dry_run)
         except Exception as e:  # noqa: BLE001
             log.error("落地失败 %s: %s", item.source.name, e)
+            # 转移失败：把源文件移入失败目录隔离（不再自动重试），记录其去向
+            moved = None if dry_run else self._move_to_failed(item.source)
             if self.store and not dry_run:
                 self.store.record(
-                    item.source, None, self.config.action.value, "failed", str(e), batch_id
+                    item.source, moved, self.config.action.value, "failed", str(e), batch_id
                 )
             if not dry_run:
                 self.notify(Event("error", f"落地失败: {item.source.name}: {e}", item=item))
@@ -271,19 +305,38 @@ class Pipeline:
             self.notify(Event("organized", f"已整理: {dest.name}", item=item, info=info, dest=dest))
         return Result(item, "done", dest=dest)
 
+    def _handle_unidentified(
+        self, path: Path, dry_run: bool, batch_id: Optional[str]
+    ) -> Optional[Result]:
+        """识别失败（解析不出标题）的候选文件：配了失败目录则隔离 + 记录，否则跳过。"""
+        if dry_run or self.config.failed_dir is None:
+            return None
+        moved = self._move_to_failed(path)
+        if self.store:
+            self.store.record(path, moved, None, "failed", "无法识别", batch_id)
+        self.notify(Event("error", f"无法识别，已隔离: {path.name}"))
+        placeholder = MediaItem(source=path, media_type=MediaType.UNKNOWN, title=path.stem)
+        return Result(placeholder, "failed", error="无法识别")
+
+    def _route_path(
+        self, path: Path, dry_run: bool, batch_id: Optional[str]
+    ) -> Optional[Result]:
+        """对一个候选文件：识别成功 → 整理；识别失败 → 隔离（见 _handle_unidentified）。"""
+        item = self.identifier.identify(path)
+        if item is None:
+            return self._handle_unidentified(path, dry_run, batch_id)
+        return self.process_item(item, dry_run=dry_run, batch_id=batch_id)
+
     def process_path(
         self, path: Path, dry_run: bool = False, batch_id: Optional[str] = None
     ) -> Optional[Result]:
         """处理单个文件路径（供 watcher 调用）。"""
         path = Path(path)
-        if not self.identifier.accept_file(path):
-            return None
-        item = self.identifier.identify(path)
-        if item is None:
+        if not self.identifier.accept_file(path) or self.config.under_failed(path):
             return None
         if batch_id is None and self.store and not dry_run:
             batch_id = self.store.new_batch_id()
-        return self.process_item(item, dry_run=dry_run, batch_id=batch_id)
+        return self._route_path(path, dry_run, batch_id)
 
     def process_target(self, path: Path, dry_run: bool = False) -> List[Result]:
         """处理一个文件或目录目标（供下载完成轮询用）。
@@ -295,9 +348,10 @@ class Pipeline:
         batch_id = self.store.new_batch_id() if (self.store and not dry_run) else None
         if path.is_dir():
             results = [
-                self.process_item(it, dry_run=dry_run, batch_id=batch_id)
-                for it in self.identifier.scan_dir(path)
+                self._route_path(p, dry_run, batch_id)
+                for p in self.identifier.accepted_paths([path])
             ]
+            results = [r for r in results if r is not None]
         else:
             result = self.process_path(path, dry_run=dry_run, batch_id=batch_id)
             results = [result] if result is not None else []
@@ -311,23 +365,22 @@ class Pipeline:
         scan_workers>1 时用有界线程池并行（瓶颈是 TMDB 网络请求）；
         process_item 本身线程安全（按源文件串行 + thread-local DB 连接）。
         """
-        items = self.identifier.scan_dirs(self.config.source_dirs)
-        log.info("识别到 %d 个候选文件", len(items))
+        paths = self.identifier.accepted_paths(self.config.source_dirs)
+        log.info("发现 %d 个候选文件", len(paths))
         batch_id = self.store.new_batch_id() if (self.store and not dry_run) else None
 
         workers = max(1, self.config.scan_workers)
-        if workers == 1 or len(items) <= 1:
-            results = [self.process_item(it, dry_run=dry_run, batch_id=batch_id) for it in items]
+        if workers == 1 or len(paths) <= 1:
+            results = [self._route_path(p, dry_run, batch_id) for p in paths]
         else:
             from concurrent.futures import ThreadPoolExecutor
 
-            with ThreadPoolExecutor(max_workers=min(workers, len(items))) as pool:
+            with ThreadPoolExecutor(max_workers=min(workers, len(paths))) as pool:
                 results = list(
-                    pool.map(
-                        lambda it: self.process_item(it, dry_run=dry_run, batch_id=batch_id),
-                        items,
-                    )
+                    pool.map(lambda p: self._route_path(p, dry_run, batch_id), paths)
                 )
+        # 识别失败且未配失败目录时 _route_path 返回 None，过滤掉
+        results = [r for r in results if r is not None]
         done = sum(1 for r in results if r.status == "done")
         log.info("完成: %d done / %d 总数", done, len(results))
         if not dry_run and done:

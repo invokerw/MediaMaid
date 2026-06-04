@@ -19,16 +19,20 @@ router = APIRouter(prefix="/api/organize")
 
 
 def _source_path(ctx: WebContext, path_str: str) -> Path:
-    """校验路径在受管根内，且必须位于某个源目录（不允许媒体库内文件）。"""
+    """校验路径在受管根内，且位于源目录或失败目录（不允许媒体库内文件）。"""
     p = safe_path(ctx, path_str)
-    srcs = []
-    for s in ctx.cfg().source_dirs:
+    cfg = ctx.cfg()
+    allowed = list(cfg.source_dirs)
+    if cfg.failed_dir is not None:
+        allowed.append(cfg.failed_dir)
+    roots = []
+    for s in allowed:
         try:
-            srcs.append(Path(s).resolve())
+            roots.append(Path(s).resolve())
         except OSError:
             continue
-    if not any(p == s or _is_within(p, s) for s in srcs):
-        raise HTTPException(400, "只能对源目录中的文件执行该操作")
+    if not any(p == s or _is_within(p, s) for s in roots):
+        raise HTTPException(400, "只能对源目录/失败目录中的文件执行该操作")
     if not p.is_file():
         raise HTTPException(404, "文件不存在")
     return p

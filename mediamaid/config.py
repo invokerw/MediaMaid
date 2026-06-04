@@ -123,6 +123,9 @@ class Config(BaseModel):
     source_dirs: List[Path]
     # 媒体库根目录
     library_dir: Path
+    # 转移失败目录：整理失败的文件移此隔离，扫描/监控不再自动处理（避免反复重试）。
+    # None 表示不启用（失败文件留在原地）。建议放在 source_dirs 之外。
+    failed_dir: Optional[Path] = None
     # 默认落地方式
     action: TransferAction = TransferAction.HARDLINK
     # 同名目标已存在时：skip / overwrite / rename
@@ -163,6 +166,17 @@ class Config(BaseModel):
     # TMDB 规则：正则命中 → 直接绑定到某 tmdb_id；并可忽略其某些季集。
     # 取代旧的「顺序正则解析器」；未命中规则的文件仍由内置 guessit 解析后按标题搜索。
     tmdb_rules: List[TmdbRule] = Field(default_factory=list)
+
+    def under_failed(self, path: Path) -> bool:
+        """path 是否位于转移失败目录内（含目录本身）。未配置 failed_dir 时恒 False。"""
+        if self.failed_dir is None:
+            return False
+        try:
+            fd = Path(self.failed_dir).resolve()
+            p = Path(path).resolve()
+        except OSError:
+            return False
+        return p == fd or fd in p.parents
 
     def plugin_specs(self, category: str) -> List[PluginSpec]:
         """返回某类别下 enabled 的插件实例配置。"""

@@ -157,6 +157,7 @@ class SettingsBody(BaseModel):
 
     source_dirs: Optional[List[str]] = None
     library_dir: Optional[str] = None
+    failed_dir: Optional[str] = None
     action: Optional[str] = None
     on_conflict: Optional[str] = None
     stable_seconds: Optional[int] = None

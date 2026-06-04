@@ -193,6 +193,98 @@ def test_tmdb_rule_ignore_skips(tmp_path):
     assert results["FANSUB - 14.mkv"] == "done"
 
 
+def _boom(*a, **k):
+    raise OSError("disk full")
+
+
+def test_failed_file_moved_to_failed_dir(tmp_path, monkeypatch):
+    cfg = _make_config(tmp_path)
+    cfg.failed_dir = cfg.source_dirs[0] / "_failed"  # 故意放在源目录内，验证排除
+    f = cfg.source_dirs[0] / "Boom.2020.1080p.mkv"
+    f.write_bytes(b"0" * (60 * 1024 * 1024))
+
+    with StateStore(cfg.state_db) as store:
+        pipe = Pipeline(cfg, store)
+        monkeypatch.setattr(pipe.organizer, "execute", _boom)  # 强制落地失败
+        results = pipe.scan()
+        assert [r.status for r in results] == ["failed"]
+        # 源文件已移入失败目录
+        assert not f.exists()
+        assert (cfg.failed_dir / "Boom.2020.1080p.mkv").exists()
+        # 记录 dst 指向失败落点
+        rec = store.recent()[0]
+        assert rec.status == "failed" and rec.dst_path and "_failed" in rec.dst_path
+
+    # 再次扫描：失败目录被排除，不再处理
+    with StateStore(cfg.state_db) as store:
+        assert Pipeline(cfg, store).scan() == []
+
+
+def test_failed_file_stays_without_failed_dir(tmp_path, monkeypatch):
+    cfg = _make_config(tmp_path)  # failed_dir 未配置
+    f = cfg.source_dirs[0] / "Boom.2020.1080p.mkv"
+    f.write_bytes(b"0" * (60 * 1024 * 1024))
+    with StateStore(cfg.state_db) as store:
+        pipe = Pipeline(cfg, store)
+        monkeypatch.setattr(pipe.organizer, "execute", _boom)
+        results = pipe.scan()
+    assert [r.status for r in results] == ["failed"]
+    assert f.exists()  # 留在原地
+
+
+def test_unidentified_moved_to_failed_dir(tmp_path, monkeypatch):
+    cfg = _make_config(tmp_path)
+    cfg.failed_dir = tmp_path / "failed"
+    f = cfg.source_dirs[0] / "garbled.release.mkv"
+    f.write_bytes(b"0" * (60 * 1024 * 1024))
+    with StateStore(cfg.state_db) as store:
+        pipe = Pipeline(cfg, store)
+        monkeypatch.setattr(pipe.identifier, "identify", lambda p: None)  # 模拟识别失败
+        results = pipe.scan()
+        assert [r.status for r in results] == ["failed"]
+        assert not f.exists()
+        assert (cfg.failed_dir / "garbled.release.mkv").exists()
+        rec = store.recent()[0]
+        assert rec.status == "failed" and rec.dst_path and "failed" in rec.dst_path
+
+
+def test_unidentified_stays_without_failed_dir(tmp_path, monkeypatch):
+    cfg = _make_config(tmp_path)  # 未配 failed_dir
+    f = cfg.source_dirs[0] / "garbled.release.mkv"
+    f.write_bytes(b"0" * (60 * 1024 * 1024))
+    with StateStore(cfg.state_db) as store:
+        pipe = Pipeline(cfg, store)
+        monkeypatch.setattr(pipe.identifier, "identify", lambda p: None)
+        assert pipe.scan() == []  # 不记录、不处理
+    assert f.exists()  # 留在原地
+
+
+def test_unknown_type_moved_to_failed_dir(tmp_path, monkeypatch):
+    cfg = _make_config(tmp_path)
+    cfg.failed_dir = tmp_path / "failed"
+    f = cfg.source_dirs[0] / "mystery.mkv"
+    f.write_bytes(b"0" * (60 * 1024 * 1024))
+    from mediamaid.models import MediaItem, MediaType as MT
+    with StateStore(cfg.state_db) as store:
+        pipe = Pipeline(cfg, store)
+        monkeypatch.setattr(
+            pipe.identifier, "identify",
+            lambda p: MediaItem(source=p, media_type=MT.UNKNOWN, title="x"),
+        )
+        results = pipe.scan()
+        assert [r.status for r in results] == ["failed"]
+        assert (cfg.failed_dir / "mystery.mkv").exists()
+
+
+def test_under_failed(tmp_path):
+    cfg = _make_config(tmp_path)
+    assert cfg.under_failed(tmp_path / "a.mkv") is False  # 未配置
+    cfg.failed_dir = tmp_path / "failed"
+    assert cfg.under_failed(tmp_path / "failed" / "a.mkv") is True
+    assert cfg.under_failed(tmp_path / "failed") is True
+    assert cfg.under_failed(tmp_path / "other" / "a.mkv") is False
+
+
 def test_dedup_skips_second_run(tmp_path):
     cfg = _make_config(tmp_path)
     src = cfg.source_dirs[0]

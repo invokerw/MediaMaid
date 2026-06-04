@@ -93,6 +93,9 @@ def api_files_roots(ctx: WebContext = Depends(get_ctx)):
              for s in config.source_dirs]
     roots.append({"label": f"媒体库: {config.library_dir}",
                   "path": str(Path(config.library_dir).resolve())})
+    if config.failed_dir is not None:
+        roots.append({"label": f"失败: {config.failed_dir}",
+                      "path": str(Path(config.failed_dir).resolve())})
     return {"roots": roots}
 
 
@@ -122,16 +125,19 @@ def api_files_list(path: str, meta: int = 0, ctx: WebContext = Depends(get_ctx))
 def _enrich_meta(ctx: WebContext, base: Path, entries: List[dict]) -> None:
     """meta=1 时为源目录里的视频文件附加转移状态与识别信息（媒体库目录不富化）。"""
     cfg = ctx.cfg()
-    in_source = False
-    for s in cfg.source_dirs:
+    candidates = list(cfg.source_dirs)
+    if cfg.failed_dir is not None:
+        candidates.append(cfg.failed_dir)
+    in_scope = False
+    for s in candidates:
         try:
             sr = Path(s).resolve()
         except OSError:
             continue
         if base == sr or _is_within(base, sr):
-            in_source = True
+            in_scope = True
             break
-    if not in_source:
+    if not in_scope:
         return
 
     identifier = Identifier(cfg)

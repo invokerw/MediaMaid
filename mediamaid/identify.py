@@ -159,6 +159,9 @@ class Identifier:
             log.warning("源目录不存在: %s", root)
             return
         for path in sorted(root.rglob("*")):
+            # 失败目录里的文件不自动处理（可能位于某源目录内）
+            if self.config.under_failed(path):
+                continue
             if not self.accept_file(path):
                 continue
             item = self.identify(path)
@@ -170,3 +173,21 @@ class Identifier:
         for root in roots:
             items.extend(self.scan_dir(root))
         return items
+
+    def accepted_paths(self, roots: List[Path]) -> List[Path]:
+        """递归列出通过过滤的候选文件路径（排除失败目录），不做识别。
+
+        供流水线统一路由：识别成功→整理；识别失败→（可选）隔离到失败目录。
+        """
+        out: List[Path] = []
+        for root in roots:
+            root = Path(root)
+            if not root.exists():
+                log.warning("源目录不存在: %s", root)
+                continue
+            for path in sorted(root.rglob("*")):
+                if self.config.under_failed(path):
+                    continue
+                if self.accept_file(path):
+                    out.append(path)
+        return out
