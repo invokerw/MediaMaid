@@ -10,7 +10,7 @@ from typing import Callable, Dict, List, Optional
 from .config import Config
 from .identify import Identifier
 from .logging_conf import get_logger
-from .models import Event, MediaInfo, MediaItem, MediaType
+from .models import Event, MediaInfo, MediaItem, MediaType, TransferAction
 from .organizer import Organizer
 from .plugins import MediaServer, Notifier, Scraper, close_plugins, create, load_plugins
 from .store import StateStore
@@ -131,6 +131,70 @@ class Pipeline:
                 return info
         return None
 
+    # 公共别名：供 Web「识别」端点做只刮削不落地的预览
+    def scrape(self, item: MediaItem) -> Optional[MediaInfo]:
+        return self._scrape(item)
+
+    def _remove_target(self, dst: Path) -> None:
+        """删除一个落地目标文件，并向上清理变空的父目录（到媒体库根为止）。"""
+        try:
+            if dst.exists() or dst.is_symlink():
+                dst.unlink()
+        except OSError as e:
+            log.error("删除目标失败 %s: %s", dst, e)
+            return
+        lib = Path(self.config.library_dir).resolve()
+        parent = dst.parent
+        while True:
+            rp = parent.resolve()
+            if rp == lib or lib not in rp.parents:
+                break
+            try:
+                parent.rmdir()  # 非空会抛 OSError
+            except OSError:
+                break
+            parent = parent.parent
+
+    def unorganize(self, src: Path) -> bool:
+        """撤销某源文件的整理：删目标文件(+空目录) + 删 done 记录。
+
+        move 动作无法恢复源文件，仅警告。返回是否删除了记录。
+        """
+        if not self.store:
+            return False
+        rec = self.store.done_record(src)
+        if rec is None:
+            return False
+        if rec.dst_path:
+            self._remove_target(Path(rec.dst_path))
+            if rec.action == TransferAction.MOVE.value:
+                log.warning("move 动作无法自动恢复源文件: %s", src)
+        self.store.delete(rec.id)
+        return True
+
+    def organize_manual(self, item: MediaItem, info: MediaInfo) -> Result:
+        """手动转移：强制按 info 落地；若该源此前已整理到别处，成功后再清理旧目标。
+
+        安全顺序：先删旧 done 记录（让新 done 记录能写入），但**保留旧文件**；
+        新转移成功且目标变化 → 删旧目标(+空目录)；新转移未成功(冲突/失败) →
+        恢复旧记录，避免丢失对旧文件的跟踪、也不误删旧文件。
+        """
+        src = item.source
+        old = self.store.done_record(src) if self.store else None
+        old_dst = Path(old.dst_path) if (old and old.dst_path) else None
+        if old and self.store:
+            self.store.delete(old.id)
+        result = self.process_item(item, force=True, override_info=info)
+        if result.status == "done":
+            if old_dst and result.dest and old_dst.resolve() != result.dest.resolve():
+                self._remove_target(old_dst)
+        elif old and self.store:
+            # 新转移未发生：恢复旧记录（旧文件未动）
+            self.store.record(
+                src, str(old_dst) if old_dst else None, old.action, "done"
+            )
+        return result
+
     def notify(self, event: Event) -> None:
         for n in self.notifiers:
             try:
@@ -139,30 +203,45 @@ class Pipeline:
                 log.warning("通知器 %s 失败: %s", n.name, e)
 
     def process_item(
-        self, item: MediaItem, dry_run: bool = False, batch_id: Optional[str] = None
+        self,
+        item: MediaItem,
+        dry_run: bool = False,
+        batch_id: Optional[str] = None,
+        force: bool = False,
+        override_info: Optional[MediaInfo] = None,
     ) -> Result:
         if item.media_type == MediaType.UNKNOWN:
             log.warning("未知媒体类型，跳过: %s", item.source.name)
             return Result(item, "skipped", error="unknown type")
 
         # 非 dry-run 且有状态库时，对该源文件串行化：检查去重→落地→记录 一气呵成，
-        # 避免并发线程对同一文件重复整理。
+        # 避免并发线程对同一文件重复整理。force=True 时跳过去重（手动重处理）。
         if self.store and not dry_run:
             with self._claim_lock(item.source):
-                return self._process_locked(item, batch_id)
-        return self._process_unlocked(item, dry_run, batch_id)
+                return self._process_locked(item, batch_id, force, override_info)
+        return self._process_unlocked(item, dry_run, batch_id, override_info)
 
-    def _process_locked(self, item: MediaItem, batch_id: Optional[str]) -> Result:
-        if self.store.is_done(item.source):
+    def _process_locked(
+        self,
+        item: MediaItem,
+        batch_id: Optional[str],
+        force: bool = False,
+        override_info: Optional[MediaInfo] = None,
+    ) -> Result:
+        if not force and self.store.is_done(item.source):
             log.debug("已处理过，跳过: %s", item.source.name)
             return Result(item, "skipped", error="already done")
-        return self._process_unlocked(item, False, batch_id)
+        return self._process_unlocked(item, False, batch_id, override_info)
 
     def _process_unlocked(
-        self, item: MediaItem, dry_run: bool, batch_id: Optional[str]
+        self,
+        item: MediaItem,
+        dry_run: bool,
+        batch_id: Optional[str],
+        override_info: Optional[MediaInfo] = None,
     ) -> Result:
-        # 刮削（失败不致命，降级为仅文件名）
-        info = self._scrape(item)
+        # 刮削（失败不致命，降级为仅文件名）；override_info 非空时直接用它（手动转移）
+        info = override_info if override_info is not None else self._scrape(item)
 
         try:
             plan = self.organizer.plan(item, info)

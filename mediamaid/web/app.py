@@ -17,7 +17,16 @@ from ..logging_conf import get_logger
 from ..plugins import load_plugins
 from ..store import StateStore
 from .deps import WebContext
-from .routers import dashboard, downloads, files, plugins, parsers, settings, subscriptions
+from .routers import (
+    dashboard,
+    downloads,
+    files,
+    organize,
+    plugins,
+    parsers,
+    settings,
+    subscriptions,
+)
 
 log = get_logger(__name__)
 
@@ -30,7 +39,7 @@ _NOT_BUILT = (
     "<pre>cd mediamaid/web/frontend && npm install && npm run build</pre></p>"
 )
 
-_ROUTERS = (dashboard, plugins, parsers, files, settings, subscriptions, downloads)
+_ROUTERS = (dashboard, plugins, parsers, files, organize, settings, subscriptions, downloads)
 
 
 def create_app(config_path: Path) -> FastAPI:

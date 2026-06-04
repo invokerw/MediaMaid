@@ -45,6 +45,55 @@ def test_integral_season_single_request(monkeypatch):
     scraper.close()
 
 
+def test_fetch_by_id_movie(monkeypatch):
+    scraper = TMDBScraper(TMDBConfig(api_key="x"))
+
+    def fake_get(path, **params):
+        if path == "/movie/603":
+            return {
+                "title": "黑客帝国", "original_title": "The Matrix",
+                "release_date": "1999-03-30", "overview": "ov",
+                "poster_path": "/p.jpg", "backdrop_path": None, "vote_average": 8.2,
+                "genres": [{"name": "Action"}], "external_ids": {"imdb_id": "tt0133093"},
+            }
+        return None
+
+    monkeypatch.setattr(scraper, "_get", fake_get)
+    info = scraper.fetch_by_id(MediaType.MOVIE, 603)
+    assert info.title == "黑客帝国" and info.year == 1999
+    assert info.tmdb_id == 603 and info.imdb_id == "tt0133093"
+    assert "Action" in info.genres and info.confidence == 1.0
+    scraper.close()
+
+
+def test_fetch_by_id_episode(monkeypatch):
+    scraper = TMDBScraper(TMDBConfig(api_key="x"))
+
+    def fake_get(path, **params):
+        if path == "/tv/1396":
+            return {"name": "Breaking Bad", "first_air_date": "2008-01-20",
+                    "genres": [{"name": "Drama"}],
+                    "external_ids": {"imdb_id": "tt0903747", "tvdb_id": 81189}}
+        if path == "/tv/1396/season/1":
+            return {"episodes": [{"episode_number": 2, "name": "Cat's in the Bag..."}]}
+        return None
+
+    monkeypatch.setattr(scraper, "_get", fake_get)
+    info = scraper.fetch_by_id(MediaType.EPISODE, 1396, season=1, episode=2)
+    assert info.title == "Breaking Bad" and info.tmdb_id == 1396
+    assert info.season == 1 and info.episode == 2
+    assert info.episode_title == "Cat's in the Bag..."
+    assert info.tvdb_id == 81189 and info.confidence == 1.0
+    scraper.close()
+
+
+def test_fetch_by_id_not_found(monkeypatch):
+    scraper = TMDBScraper(TMDBConfig(api_key="x"))
+    monkeypatch.setattr(scraper, "_get", lambda *a, **k: None)
+    assert scraper.fetch_by_id(MediaType.MOVIE, 999) is None
+    scraper.close()
+
+
 def test_persistent_cache_survives_reload(tmp_path):
     path = tmp_path / "tmdb.json"
     c1 = _TTLCache(maxsize=10, ttl=3600, path=str(path))

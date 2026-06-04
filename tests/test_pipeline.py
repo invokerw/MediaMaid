@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from mediamaid.config import Config
-from mediamaid.models import TransferAction
+from mediamaid.models import MediaInfo, MediaType, TransferAction
 from mediamaid.pipeline import Pipeline, build_scrapers
 from mediamaid.store import StateStore
 
@@ -82,6 +82,93 @@ def test_build_scrapers_requires_tmdb_key(tmp_path):
     # 配了 api_key 则固定返回 tmdb
     scrapers = build_scrapers(_cfg({"scraper": [{"name": "tmdb", "config": {"api_key": "k"}}]}))
     assert [s.name for s in scrapers] == ["tmdb"]
+
+
+def test_manual_override_info_and_force(tmp_path):
+    """override_info 用其字段命名；force 跳过去重；unorganize 删目标+记录。"""
+    cfg = _make_config(tmp_path)
+    src = cfg.source_dirs[0]
+    f = src / "Some.Movie.2020.1080p.mkv"
+    f.write_bytes(b"0" * (60 * 1024 * 1024))
+
+    with StateStore(cfg.state_db) as store:
+        pipe = Pipeline(cfg, store)
+        item = pipe.identifier.identify(f)
+        # 注入手填元数据：标题用 info 的（而非解析的 "Some Movie"）
+        info = MediaInfo(title="正确片名", year=2021, tmdb_id=603, confidence=1.0)
+        r1 = pipe.process_item(item, force=True, override_info=info)
+        assert r1.status == "done"
+        dest1 = cfg.library_dir / "Movies" / "正确片名 (2021)" / "正确片名 (2021).mkv"
+        assert dest1.exists()
+        assert store.is_done(f)
+
+        # 不 force 第二次 → 跳过
+        assert pipe.process_item(item, override_info=info).status == "skipped"
+
+        # 撤销：删目标 + 记录
+        assert pipe.unorganize(f) is True
+        assert not dest1.exists()
+        assert not store.is_done(f)
+
+        # force 第二次（已撤销后）能重新落地
+        assert pipe.process_item(item, force=True, override_info=info).status == "done"
+
+
+def test_organize_manual_covering_correction(tmp_path):
+    """organize_manual：改判到新位置后，旧目标被清理、记录指向新目标。"""
+    cfg = _make_config(tmp_path)
+    f = cfg.source_dirs[0] / "movie.mkv"
+    f.write_bytes(b"0" * (60 * 1024 * 1024))
+
+    with StateStore(cfg.state_db) as store:
+        pipe = Pipeline(cfg, store)
+        item = pipe.identifier.identify(f)
+
+        a = MediaInfo(title="片名A", year=2001, tmdb_id=1, confidence=1.0)
+        item.media_type = MediaType.MOVIE
+        r1 = pipe.organize_manual(item, a)
+        old_dest = r1.dest
+        assert old_dest.exists()
+
+        # 改判到 B（不冲突）→ 旧目标删除、新目标存在、记录指向新目标
+        b = MediaInfo(title="片名B", year=2002, tmdb_id=2, confidence=1.0)
+        r2 = pipe.organize_manual(item, b)
+        assert r2.status == "done"
+        assert r2.dest.exists()
+        assert not old_dest.exists()  # 旧目标已清理
+        assert not old_dest.parent.exists()  # 空目录也清掉
+        rec = store.done_record(f)
+        assert rec.dst_path == str(r2.dest)
+
+
+def test_organize_manual_conflict_restores_old(tmp_path):
+    """新目标已被别的文件占用(skip) → 旧记录恢复、旧文件不丢。"""
+    cfg = _make_config(tmp_path)  # on_conflict 默认 skip
+    f = cfg.source_dirs[0] / "movie.mkv"
+    f.write_bytes(b"0" * (60 * 1024 * 1024))
+
+    with StateStore(cfg.state_db) as store:
+        pipe = Pipeline(cfg, store)
+        item = pipe.identifier.identify(f)
+        item.media_type = MediaType.MOVIE
+
+        a = MediaInfo(title="片名A", year=2001, tmdb_id=1, confidence=1.0)
+        r1 = pipe.organize_manual(item, a)
+        old_dest = r1.dest
+
+        # 预先占用 B 的目标路径（模拟另一个文件已在该位置）
+        b = MediaInfo(title="片名B", year=2002, tmdb_id=2, confidence=1.0)
+        b_dest = cfg.library_dir / "Movies" / "片名B (2002)" / "片名B (2002).mkv"
+        b_dest.parent.mkdir(parents=True, exist_ok=True)
+        b_dest.write_bytes(b"occupied")
+
+        r2 = pipe.organize_manual(item, b)
+        assert r2.status == "skipped"
+        # 旧目标与旧记录都还在（未被破坏）
+        assert old_dest.exists()
+        assert store.done_record(f).dst_path == str(old_dest)
+        # 占用文件未被覆盖
+        assert b_dest.read_bytes() == b"occupied"
 
 
 def test_dedup_skips_second_run(tmp_path):

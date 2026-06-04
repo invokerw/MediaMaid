@@ -200,6 +200,66 @@ class TMDBScraper(Scraper):
             return self._scrape_episode(item)
         return None
 
+    def fetch_by_id(
+        self,
+        media_type: MediaType,
+        tmdb_id: int,
+        season: Optional[int] = None,
+        episode: Optional[int] = None,
+    ) -> Optional[MediaInfo]:
+        """按 TMDB ID 直查详情组装 MediaInfo（绕过搜索，供手动转移用）。
+
+        用户已确认条目，故 confidence=1.0；拉不到详情返回 None。
+        """
+        if media_type == MediaType.MOVIE:
+            details = self._details("movie", tmdb_id)
+            if not details:
+                return None
+            info = MediaInfo(
+                title=details.get("title") or details.get("original_title") or "",
+                year=_year_of(details.get("release_date")),
+                tmdb_id=tmdb_id,
+                overview=details.get("overview"),
+                poster_url=_img(details.get("poster_path")),
+                fanart_url=_img(details.get("backdrop_path")),
+                rating=details.get("vote_average") or None,
+                confidence=1.0,
+            )
+            info.genres = [g.get("name") for g in details.get("genres", []) if g.get("name")]
+            ext = details.get("external_ids") or {}
+            info.imdb_id = ext.get("imdb_id") or details.get("imdb_id")
+            return info
+
+        if media_type == MediaType.EPISODE:
+            details = self._details("tv", tmdb_id)
+            if not details:
+                return None
+            info = MediaInfo(
+                title=details.get("name") or details.get("original_name") or "",
+                year=_year_of(details.get("first_air_date")),
+                tmdb_id=tmdb_id,
+                overview=details.get("overview"),
+                poster_url=_img(details.get("poster_path")),
+                fanart_url=_img(details.get("backdrop_path")),
+                season=season,
+                episode=episode,
+                confidence=1.0,
+            )
+            info.genres = [g.get("name") for g in details.get("genres", []) if g.get("name")]
+            ext = details.get("external_ids") or {}
+            info.imdb_id = ext.get("imdb_id")
+            info.tvdb_id = ext.get("tvdb_id")
+            if season is not None and episode is not None:
+                season_data = self._season(tmdb_id, season)
+                if season_data:
+                    for ep in season_data.get("episodes", []):
+                        if ep.get("episode_number") == episode:
+                            info.episode_title = ep.get("name")
+                            break
+            return info
+
+        return None
+
     # ---- 电影 ----
     def _scrape_movie(self, item: MediaItem) -> Optional[MediaInfo]:
         results = self._search("movie", item)

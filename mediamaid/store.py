@@ -11,7 +11,7 @@ import threading
 import time
 import uuid
 from pathlib import Path
-from typing import List, NamedTuple, Optional
+from typing import Dict, List, NamedTuple, Optional
 
 from .logging_conf import get_logger
 
@@ -228,6 +228,36 @@ class StateStore:
     def delete(self, record_id: int) -> None:
         self.conn.execute("DELETE FROM processed WHERE id=?", (record_id,))
         self.conn.commit()
+
+    def done_record(self, src: Path) -> Optional[Record]:
+        """取该源文件最新的 done 记录（按路径匹配），无则 None。供撤销复用。"""
+        cur = self.conn.execute(
+            "SELECT id, src_path, dst_path, action, status, ts FROM processed "
+            "WHERE status='done' AND src_path=? ORDER BY id DESC LIMIT 1",
+            (str(src),),
+        )
+        row = cur.fetchone()
+        return self._to_record(row) if row else None
+
+    def done_for(self, srcs: List[Path]) -> Dict[str, Record]:
+        """批量查一组源路径的 done 记录，返回 {src_path: Record}。供文件列表标注。"""
+        paths = [str(s) for s in srcs]
+        if not paths:
+            return {}
+        out: Dict[str, Record] = {}
+        # SQLite 变量上限 999，分批查询
+        for i in range(0, len(paths), 500):
+            chunk = paths[i : i + 500]
+            ph = ",".join("?" * len(chunk))
+            cur = self.conn.execute(
+                "SELECT id, src_path, dst_path, action, status, ts FROM processed "
+                f"WHERE status='done' AND src_path IN ({ph}) ORDER BY id ASC",
+                chunk,
+            )
+            for row in cur.fetchall():
+                # ORDER BY id ASC + 覆盖写入 → 同路径保留最新（id 最大）
+                out[row["src_path"]] = self._to_record(row)
+        return out
 
     @staticmethod
     def _to_record(r: sqlite3.Row) -> Record:

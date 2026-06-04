@@ -51,6 +51,41 @@ def test_plugins_api_lists_builtins(client):
     assert "log" in names
 
 
+def test_files_meta_enrichment(client):
+    c, tmp_path = client
+    src = str((tmp_path / "downloads"))
+    r = c.get(f"/api/files?path={src}&meta=1")
+    assert r.status_code == 200
+    e = next(x for x in r.json()["entries"] if x["name"].endswith(".mkv"))
+    assert e["is_video"] is True
+    assert e["organized"] is False
+    assert e["parsed"]["title"] == "The Matrix"
+    assert e["parsed"]["year"] == 1999
+    assert e["parsed"]["media_type"] == "movie"
+
+
+def test_organize_identify_without_key(client):
+    c, tmp_path = client
+    path = str(tmp_path / "downloads" / "The.Matrix.1999.1080p.mkv")
+    r = c.post("/api/organize/identify", json={"path": path})
+    assert r.status_code == 200
+    body = r.json()
+    # 无 TMDB key：仅解析，matched 为空
+    assert body["has_key"] is False
+    assert body["matched"] is None
+    assert body["parsed"]["title"] == "The Matrix"
+
+
+def test_organize_manual_rejects_library_path(client):
+    c, tmp_path = client
+    lib_file = str(tmp_path / "media" / "x.mkv")  # 媒体库内 → 拒绝
+    r = c.post(
+        "/api/organize/manual",
+        json={"path": lib_file, "tmdb_id": 1, "media_type": "movie"},
+    )
+    assert r.status_code in (400, 404)
+
+
 def test_config_api(client):
     c, _ = client
     r = c.get("/api/config")

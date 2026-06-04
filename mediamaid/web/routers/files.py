@@ -11,7 +11,8 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from ..deps import WebContext, get_ctx, safe_path
+from ...identify import Identifier
+from ..deps import WebContext, _is_within, get_ctx, safe_path
 from ..schemas import DeleteBody, RenameBody
 
 router = APIRouter(prefix="/api")
@@ -96,7 +97,7 @@ def api_files_roots(ctx: WebContext = Depends(get_ctx)):
 
 
 @router.get("/files")
-def api_files_list(path: str, ctx: WebContext = Depends(get_ctx)):
+def api_files_list(path: str, meta: int = 0, ctx: WebContext = Depends(get_ctx)):
     base = safe_path(ctx, path)
     if not base.is_dir():
         raise HTTPException(400, "不是目录")
@@ -113,7 +114,55 @@ def api_files_list(path: str, ctx: WebContext = Depends(get_ctx)):
             })
         except OSError:
             continue
+    if meta:
+        _enrich_meta(ctx, base, entries)
     return {"path": str(base), "parent": str(base.parent), "entries": entries}
+
+
+def _enrich_meta(ctx: WebContext, base: Path, entries: List[dict]) -> None:
+    """meta=1 时为源目录里的视频文件附加转移状态与识别信息（媒体库目录不富化）。"""
+    cfg = ctx.cfg()
+    in_source = False
+    for s in cfg.source_dirs:
+        try:
+            sr = Path(s).resolve()
+        except OSError:
+            continue
+        if base == sr or _is_within(base, sr):
+            in_source = True
+            break
+    if not in_source:
+        return
+
+    identifier = Identifier(cfg)
+    video_paths = [
+        Path(e["path"])
+        for e in entries
+        if not e["is_dir"] and identifier.accept_file(Path(e["path"]))
+    ]
+    done_map = ctx.store.done_for(video_paths)
+    video_set = {str(p) for p in video_paths}
+    for e in entries:
+        if e["path"] not in video_set:
+            e["is_video"] = False
+            continue
+        e["is_video"] = True
+        rec = done_map.get(e["path"])
+        e["organized"] = rec is not None
+        e["dst_path"] = rec.dst_path if rec else None
+        item = identifier.identify(Path(e["path"]))
+        e["parsed"] = (
+            {
+                "title": item.title,
+                "year": item.year,
+                "season": item.season,
+                "episode": item.episode,
+                "media_type": item.media_type.value,
+                "category": item.category,
+            }
+            if item
+            else None
+        )
 
 
 @router.post("/files/delete")

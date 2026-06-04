@@ -101,6 +101,23 @@ class RenameBody(BaseModel):
     name: str
 
 
+class OrganizeIdentifyBody(BaseModel):
+    """对单个源文件做识别 + TMDB 自动匹配预览（不落地）。"""
+
+    path: str
+
+
+class OrganizeManualBody(BaseModel):
+    """手动转移：按用户指定的 TMDB 条目刮削并落地。"""
+
+    path: str
+    tmdb_id: int
+    media_type: str  # "movie" / "episode"
+    season: Optional[int] = None
+    episode: Optional[int] = None
+    category: Optional[str] = None  # 剧集分类："tv" / "anime"
+
+
 class FiltersBody(BaseModel):
     video_extensions: Optional[List[str]] = None
     min_size_mb: Optional[int] = None

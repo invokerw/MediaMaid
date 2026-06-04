@@ -156,6 +156,62 @@ export interface DownloaderInfo {
   supports_management: boolean;
 }
 
+export interface ParsedInfo {
+  title: string;
+  year: number | null;
+  season: number | null;
+  episode: number | null;
+  media_type: string; // movie / episode / unknown
+  category: string; // tv / anime
+}
+
+export interface FileEntry {
+  name: string;
+  path: string;
+  is_dir: boolean;
+  size: number;
+  mtime: number;
+  // 仅源目录 meta=1 时附带
+  is_video?: boolean;
+  organized?: boolean;
+  dst_path?: string | null;
+  parsed?: ParsedInfo | null;
+}
+
+export interface MatchedInfo {
+  title: string;
+  year: number | null;
+  tmdb_id: number | null;
+  season: number | null;
+  episode: number | null;
+  episode_title: string | null;
+  confidence: number;
+  poster_url: string | null;
+}
+
+export interface IdentifyResult {
+  parsed: ParsedInfo | null;
+  matched: MatchedInfo | null;
+  has_key: boolean;
+  dest_preview: string | null;
+}
+
+export interface TmdbPreview {
+  title: string;
+  year: number | null;
+  episode_title: string | null;
+  dest_preview: string;
+}
+
+export interface ManualOrganizeBody {
+  path: string;
+  tmdb_id: number;
+  media_type: string; // movie / episode
+  season?: number | null;
+  episode?: number | null;
+  category?: string | null; // tv / anime
+}
+
 async function get<T>(url: string): Promise<T> {
   const r = await fetch(url);
   if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
@@ -203,15 +259,31 @@ export const api = {
   settings: () => get<Settings>("/api/settings"),
   updateSettings: (body: Partial<Settings>) => put<Settings>("/api/settings", body),
   filesRoots: () => get<{ roots: { label: string; path: string }[] }>("/api/files/roots"),
-  filesList: (path: string) =>
-    get<{
-      path: string;
-      parent: string;
-      entries: { name: string; path: string; is_dir: boolean; size: number; mtime: number }[];
-    }>(`/api/files?path=${encodeURIComponent(path)}`),
+  filesList: (path: string, meta = 0) =>
+    get<{ path: string; parent: string; entries: FileEntry[] }>(
+      `/api/files?path=${encodeURIComponent(path)}${meta ? "&meta=1" : ""}`
+    ),
   filesDelete: (path: string) => post<{ ok: boolean }>("/api/files/delete", { path }),
   filesRename: (path: string, name: string) =>
     post<{ ok: boolean; path: string }>("/api/files/rename", { path, name }),
+  organizeIdentify: (path: string) =>
+    post<IdentifyResult>("/api/organize/identify", { path }),
+  organizeManual: (body: ManualOrganizeBody) =>
+    post<{ status: string; dest: string | null; error: string | null }>(
+      "/api/organize/manual",
+      body
+    ),
+  tmdbPreview: (p: {
+    tmdb_id: number;
+    media_type: string;
+    season?: number | null;
+    episode?: number | null;
+  }) => {
+    const q = new URLSearchParams({ tmdb_id: String(p.tmdb_id), media_type: p.media_type });
+    if (p.season != null) q.set("season", String(p.season));
+    if (p.episode != null) q.set("episode", String(p.episode));
+    return get<TmdbPreview>(`/api/organize/tmdb-preview?${q.toString()}`);
+  },
   diagHardlink: () =>
     get<{
       action: string;
