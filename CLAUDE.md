@@ -35,6 +35,11 @@ scripts/restart-web.sh --no-build      # 仅重启后端
 
 无 lint/format 工具配置；测试仅依赖 `pytest`（无额外 markers/addopts）。本仓库默认用 `demo/config.yaml` 跑本地 Web（端口 8500）。
 
+## 工作流约定（重要）
+
+- **每次改动（前端或后端）完成后，运行 `scripts/restart-web.sh` 重建并重启服务，然后请用户在浏览器验证，确认无误再继续或提交。** 仅改后端可用 `--no-build` 只重启；改了前端 `.tsx` 必须重建。
+- 提交前先跑 `.venv/bin/pytest` 确认全绿。**只在用户明确说“提交”时才 `git commit`，明确说“push”时才推送。**
+
 ## 架构大图
 
 数据沿一条流水线流动，四级阶段各由一类可插拔插件承担：
@@ -49,12 +54,14 @@ scripts/restart-web.sh --no-build      # 仅重启后端
 
 - **`pipeline.py` 是核心编排器**。`Pipeline.process_item/process_path/process_target/scan` 串起识别→刮削→落地→写状态库。`build_notifiers/build_mediaservers` 按配置实例化插件。**刮削器固定为 TMDB（始终启用、不可关闭，不再支持其他刮削器）**：`build_scrapers` 只实例化 tmdb，**未配置 api_key 直接抛 `RuntimeError`**（不再降级为仅按文件名整理）。订阅/通知流程不需要刮削器，用 `build_notify(config)` 单独构造通知回调，避免缺 key 时被误伤。
 - **`daemon.py`（`mediamaid run`）** 把 watcher + 订阅轮询 + 完成轮询 + 配置热重载合成一个常驻进程，每条都是 daemon 线程。是理解“闭环”的入口。
-- **`identify.py`** 用**解析器链**（`config.parsers` 顺序）把文件名解析成 `MediaItem`；`guessit` 始终作为最后兜底（用户没显式配它就自动追加）。
-- **`organizer.py` + `naming.py` + `transfer.py`**：`organizer.plan()` 算目标路径（命名模板见 `config.NamingConfig`），`transfer` 执行硬链接（跨盘自动回退复制）/复制（临时文件+原子改名）/移动，冲突按 `on_conflict`（skip/overwrite/rename）处理。
+- **`identify.py`** 用解析器链把文件名解析成 `MediaItem`：链首是 **TMDB 绑定解析器**（`config.tmdb_rules` 里的正则命中 → 直接钉到某 `tmdb_id`、季集从正则取，刮削阶段走 `fetch_by_id` 跳过搜索），其后是**内置 guessit 兜底**（解析出标题交给 TMDB 搜索）。`tmdb_rules` 还能**忽略**某 tmdb_id 的某些季/集（`Config.is_ignored`，刮削后过滤跳过）。
+- **`organizer.py` + `naming.py` + `transfer.py`**：`organizer.plan()` 算目标路径（命名模板见 `config.NamingConfig`），`transfer` 执行硬链接（跨盘自动回退复制）/复制（临时文件+原子改名）/移动，冲突按 `on_conflict`（skip/overwrite/rename）处理。**分类 TV/Anime 由 `organizer._category` 按 TMDB 题材判定**（题材含动画 genre 16 → `Anime/`；绑定规则/手动转移可显式指定 category）。**转移或识别失败**：若配置了 `failed_dir`，源文件被移入该目录隔离并记 `failed`，扫描/监控排除该目录不再自动重试（见 `pipeline._move_to_failed` / `_handle_unidentified`）。
 
 ## 插件系统（核心扩展点）
 
 六个类别，基类在 `mediamaid/plugins/base.py`：`parser` / `scraper` / `subscriber` / `downloader` / `notifier` / `mediaserver`。
+
+> **注意：`scraper` 固定为 `tmdb`、`parser` 固定为 `guessit`（二者均为内置、始终启用、不可关闭，「插件」页只显示「内置」标识不给开关）。** 实际可扩展/可启停的主要是 `subscriber` / `downloader` / `notifier` / `mediaserver`。
 
 - **新增插件 = 在 `mediamaid/plugins/<category>/` 放一个 `.py`，继承对应基类并 `@register`**（`plugins/registry.py`）。文件落地即被自动发现（目录扫描），无需改注册表。
 - 插件声明类属性 `category` / `name`，并可声明 `ConfigModel`（pydantic）做配置校验。`create(category, name, config)` 会用 `ConfigModel.model_validate` 校验后实例化。
@@ -67,16 +74,16 @@ scripts/restart-web.sh --no-build      # 仅重启后端
 
 ## 配置与热重载
 
-- `config.py` 用 pydantic 校验 YAML（见 `config.example.yaml` 逐项注释）。`Config.plugin_specs(category)` 取某类别启用的插件实例；`subscriptions` 与 `parsers` 是命名实例列表（区别于 `plugins.subscriber`）。
+- `config.py` 用 pydantic 校验 YAML（见 `config.example.yaml` 逐项注释）。`Config.plugin_specs(category)` 取某类别启用的插件实例；`subscriptions` 与 `tmdb_rules` 是命名实例列表（区别于 `plugins.subscriber`）。`failed_dir`（可选）= 转移/识别失败的隔离目录；`tmdb_rules` = TMDB 绑定 + 忽略规则（取代旧的 `parsers` 顺序正则）。
 - **`ConfigManager` 按文件 mtime+size 自动热重载**，线程安全。Web 与守护进程都通过它读配置：任一方写盘后，其他读取方下次 `get()` 自动感知。`daemon` 的配置监视线程检测到变更会调各组件的 `reload()` 热重建。修改配置流程时，注意 reload 路径要把旧插件 `close()` 掉。
 
 ## 状态库并发模型（store.py）
 
-SQLite，**每线程一个连接（thread-local）+ WAL + busy_timeout**——读不互相阻塞、写由 SQLite 自身串行化，进程内无全局锁。`processed` 表去重并支持 `undo`（按 `batch_id` 成批回滚）；`seen_releases` 给订阅去重。`scan` 用 `scan_workers` 个线程并行（瓶颈是 TMDB 网络），`Pipeline` 用按源文件粒度的锁串行化“查重→落地→记录”避免重复整理同一文件。可与 `mediamaid run` 同时运行（共享同一 DB）。
+SQLite，**每线程一个连接（thread-local）+ WAL + busy_timeout**——读不互相阻塞、写由 SQLite 自身串行化，进程内无全局锁。`processed` 表去重并支持 `undo`（按 `batch_id` 成批回滚），并提供批量 `delete_many`/`set_status`（记录页用）与 `done_for`/`done_record`（文件页转移状态、覆盖式纠正用）；`seen_releases` 给订阅去重。`scan` 用 `scan_workers` 个线程并行（瓶颈是 TMDB 网络），`Pipeline` 用按源文件粒度的锁串行化“查重→落地→记录”避免重复整理同一文件。可与 `mediamaid run` 同时运行（共享同一 DB）。
 
 ## Web 前端
 
-后端 FastAPI（`mediamaid/web/`）：`app.py` 装配应用并挂载 `routers/` 下各领域 router（API 全在 `/api/*`），catch-all 托管 React SPA。`deps.py` 的 `WebContext`（挂 `app.state.ctx`）提供配置/状态库/`safe_path`（路径安全：只允许操作 source_dirs/library_dir 范围内）。
+后端 FastAPI（`mediamaid/web/`）：`app.py` 装配应用并挂载 `routers/` 下各领域 router（API 全在 `/api/*`），catch-all 托管 React SPA。`deps.py` 的 `WebContext`（挂 `app.state.ctx`）提供配置/状态库/`safe_path`（路径安全：只允许操作 `source_dirs` / `library_dir` / `failed_dir` 范围内）。主要 router：`dashboard`（仪表盘/记录/记录批量删改/扫描/订阅触发）、`organize`（单文件识别预览 / 手动转移按 tmdb_id 直查落地 / 按 ID 预览）、`files`（受管目录浏览，源目录/失败目录附转移状态与识别信息）、`parsers`（`/api/tmdb-rules` CRUD）、`plugins` / `settings` / `subscriptions` / `downloads`。
 
 前端是 **Vite + React + TypeScript + Ant Design**（`mediamaid/web/frontend/`），构建产物输出到 `mediamaid/web/static/`（提交进仓库，运行无需 Node）。
 
