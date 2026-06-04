@@ -86,7 +86,6 @@ class Identifier:
         self.config = config
         self.filters: FilterConfig = config.filters
         self._exts = {e.lower().lstrip(".") for e in self.filters.video_extensions}
-        self._anime_keywords = [k.lower() for k in config.anime_keywords if k]
         self.parsers = build_parsers(config)
 
     def accept_file(self, path: Path) -> bool:
@@ -117,13 +116,6 @@ class Identifier:
                 return res, parser.name
         return None, None
 
-    def _category(self, path: Path) -> str:
-        """按 anime_keywords 命中源路径(含目录)则归为动漫，否则普通剧集。"""
-        src = str(path).lower()
-        if any(k in src for k in self._anime_keywords):
-            return "anime"
-        return "tv"
-
     def identify(self, path: Path) -> Optional[MediaItem]:
         """解析单个文件，返回 MediaItem；无法识别返回 None。"""
         res, _ = self.parse_name(path.name)
@@ -138,8 +130,8 @@ class Identifier:
             season=res.season,
             episode=res.episode,
             tmdb_id=res.tmdb_id,
-            # 绑定规则可指定分类（tv/anime）；否则按源路径关键词判定
-            category=res.category or self._category(path),
+            # 分类只在绑定规则显式指定时给出；否则为 None，落地阶段按 TMDB 题材判定
+            category=res.category,
             raw=res.raw,
         )
 

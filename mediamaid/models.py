@@ -34,8 +34,8 @@ class MediaItem:
     # 命中 TMDB 绑定规则时携带，刮削阶段据此直查（绕过搜索）
     tmdb_id: Optional[int] = None
     # 分类：剧集可为 "tv" / "anime"，决定落地到 TV/ 还是 Anime/ 目录。
-    # 在识别阶段判定（见 identify.py），落地阶段直接消费，避免分类规则与落地耦合。
-    category: str = "tv"
+    # None=自动（落地阶段按 TMDB 题材判定）；非空=显式指定（如 TMDB 绑定规则/手动转移）。
+    category: Optional[str] = None
     # guessit 的原始解析结果，保留以备调试 / 进阶匹配
     raw: dict = field(default_factory=dict)
 
@@ -56,6 +56,8 @@ class MediaInfo:
     tvdb_id: Optional[int] = None
     overview: Optional[str] = None
     genres: list = field(default_factory=list)
+    # TMDB 题材 ID 列表（16=动画），用于按题材判定动漫
+    genre_ids: list = field(default_factory=list)
     rating: Optional[float] = None
     # 剧集字段
     episode_title: Optional[str] = None

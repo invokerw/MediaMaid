@@ -179,13 +179,6 @@ export default function Config() {
         <Form.Item name={["filters", "min_size_mb"]} label="最小体积（MB）">
           <InputNumber min={0} style={{ width: "100%" }} />
         </Form.Item>
-        <Form.Item
-          name="anime_keywords"
-          label="动漫归类关键词"
-          tooltip="源文件路径命中任一关键词的剧集归入 Anime/ 目录。建议动漫订阅下载到名含 anime 的子目录，或填字幕组名。"
-        >
-          {tags("如 anime、动漫、字幕组名")}
-        </Form.Item>
       </Card>
 
       <Card size="small" title="命名模板" style={{ marginTop: 16 }}>

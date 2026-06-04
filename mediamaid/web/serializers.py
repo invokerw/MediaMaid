@@ -37,7 +37,6 @@ def settings_dict(config: Config) -> dict:
         "poll_interval": config.poll_interval,
         "write_nfo": config.write_nfo,
         "download_artwork": config.download_artwork,
-        "anime_keywords": config.anime_keywords,
         "filters": {
             "video_extensions": config.filters.video_extensions,
             "min_size_mb": config.filters.min_size_mb,

@@ -52,7 +52,6 @@ export interface Settings {
   poll_interval: number;
   write_nfo: boolean;
   download_artwork: boolean;
-  anime_keywords: string[];
   filters: {
     video_extensions: string[];
     min_size_mb: number;

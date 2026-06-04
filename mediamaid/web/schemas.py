@@ -171,6 +171,5 @@ class SettingsBody(BaseModel):
     poll_interval: Optional[int] = None
     write_nfo: Optional[bool] = None
     download_artwork: Optional[bool] = None
-    anime_keywords: Optional[List[str]] = None
     filters: Optional[FiltersBody] = None
     naming: Optional[NamingBody] = None

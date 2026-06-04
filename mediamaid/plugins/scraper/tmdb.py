@@ -229,6 +229,7 @@ class TMDBScraper(Scraper):
                 confidence=1.0,
             )
             info.genres = [g.get("name") for g in details.get("genres", []) if g.get("name")]
+            info.genre_ids = [g.get("id") for g in details.get("genres", []) if g.get("id")]
             ext = details.get("external_ids") or {}
             info.imdb_id = ext.get("imdb_id") or details.get("imdb_id")
             return info
@@ -249,6 +250,7 @@ class TMDBScraper(Scraper):
                 confidence=1.0,
             )
             info.genres = [g.get("name") for g in details.get("genres", []) if g.get("name")]
+            info.genre_ids = [g.get("id") for g in details.get("genres", []) if g.get("id")]
             ext = details.get("external_ids") or {}
             info.imdb_id = ext.get("imdb_id")
             info.tvdb_id = ext.get("tvdb_id")
@@ -292,6 +294,7 @@ class TMDBScraper(Scraper):
             details = self._details("movie", info.tmdb_id)
             if details:
                 info.genres = [g.get("name") for g in details.get("genres", []) if g.get("name")]
+                info.genre_ids = [g.get("id") for g in details.get("genres", []) if g.get("id")]
                 info.imdb_id = (details.get("external_ids") or {}).get("imdb_id") or details.get("imdb_id")
         return info
 
@@ -326,6 +329,7 @@ class TMDBScraper(Scraper):
             details = self._details("tv", show_id)
             if details:
                 info.genres = [g.get("name") for g in details.get("genres", []) if g.get("name")]
+                info.genre_ids = [g.get("id") for g in details.get("genres", []) if g.get("id")]
                 ext = details.get("external_ids") or {}
                 info.imdb_id = ext.get("imdb_id")
                 info.tvdb_id = ext.get("tvdb_id")

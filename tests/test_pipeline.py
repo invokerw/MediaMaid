@@ -48,18 +48,35 @@ def test_dry_run_does_not_write(tmp_path):
     assert not cfg.library_dir.exists()
 
 
-def test_anime_keyword_routes_to_anime_dir(tmp_path):
+def test_anime_classified_by_genre(tmp_path):
+    """借鉴 nas-tools：刮削题材含动画(genre 16) 的剧集归入 Anime/。"""
     cfg = _make_config(tmp_path)
-    cfg.anime_keywords = ["anime"]
     src = cfg.source_dirs[0]
-    anime_dir = src / "anime"
-    anime_dir.mkdir()
-    (anime_dir / "Shrouding.the.Heavens.S01E02.1080p.mkv").write_bytes(b"0" * (60 * 1024 * 1024))
+    (src / "Shrouding.the.Heavens.S01E02.1080p.mkv").write_bytes(b"0" * (60 * 1024 * 1024))
     with StateStore(cfg.state_db) as store:
-        Pipeline(cfg, store).scan()
-    # 命中 anime 关键词 → 进 Anime/ 目录
+        pipe = Pipeline(cfg, store)
+        pipe.scrapers[0].scrape = lambda item: MediaInfo(
+            title="Shrouding the Heavens", year=2023,
+            season=item.season, episode=item.episode, genre_ids=[16], confidence=1.0,
+        )
+        pipe.scan()
     hits = list((cfg.library_dir / "Anime").rglob("*.mkv"))
-    assert hits, "动漫文件应整理进 Anime/ 目录"
+    assert hits, "题材含动画(16)应整理进 Anime/ 目录"
+
+
+def test_non_anime_episode_goes_to_tv(tmp_path):
+    cfg = _make_config(tmp_path)
+    src = cfg.source_dirs[0]
+    (src / "Breaking.Bad.S01E01.720p.mkv").write_bytes(b"0" * (60 * 1024 * 1024))
+    with StateStore(cfg.state_db) as store:
+        pipe = Pipeline(cfg, store)
+        pipe.scrapers[0].scrape = lambda item: MediaInfo(
+            title="Breaking Bad", year=2008,
+            season=item.season, episode=item.episode, genre_ids=[18], confidence=1.0,
+        )
+        pipe.scan()
+    assert list((cfg.library_dir / "TV").rglob("*.mkv"))
+    assert not (cfg.library_dir / "Anime").exists()
 
 
 def test_build_scrapers_requires_tmdb_key(tmp_path):

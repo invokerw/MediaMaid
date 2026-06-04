@@ -35,9 +35,22 @@ class Organizer:
                 pass
             self._http = None
 
+    # TMDB 题材 ID：16=动画
+    _ANIME_GENRE_ID = 16
+
+    def _category(self, item: MediaItem, info: Optional[MediaInfo]) -> str:
+        """分类（tv/anime）：显式指定（绑定规则/手动）优先；否则按 TMDB 题材判定。
+
+        借鉴 nas-tools：刮削结果题材含「动画」(genre 16) 即归为动漫。
+        """
+        if item.category:
+            return item.category
+        if info and self._ANIME_GENRE_ID in (info.genre_ids or []):
+            return "anime"
+        return "tv"
+
     def plan(self, item: MediaItem, info: Optional[MediaInfo]) -> TransferPlan:
-        # 分类（tv/anime）在识别阶段已定，落地直接消费
-        rel = naming.render_dest(item, info, self.config.naming, item.category)
+        rel = naming.render_dest(item, info, self.config.naming, self._category(item, info))
         dest = self.config.library_dir / rel
         return TransferPlan(
             item=item,

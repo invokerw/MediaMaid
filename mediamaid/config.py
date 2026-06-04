@@ -147,9 +147,6 @@ class Config(BaseModel):
     # 后处理选项（非某个插件专属）
     write_nfo: bool = False
     download_artwork: bool = False
-    # 动漫归类关键词：源文件路径(含目录)命中任一关键词的剧集归入 Anime/。
-    # 建议把动漫订阅的下载保存到名含 anime 的子目录，或填字幕组名等。
-    anime_keywords: List[str] = Field(default_factory=list)
 
     filters: FilterConfig = Field(default_factory=FilterConfig)
     naming: NamingConfig = Field(default_factory=NamingConfig)
