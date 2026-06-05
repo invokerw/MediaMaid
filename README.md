@@ -150,20 +150,29 @@ class BarkNotifier(Notifier):
 
 ## 部署
 
-**Docker**（编辑 `docker-compose.yml` 的挂载与 `config/config.yaml`）：
+**Docker（一体化：MediaMaid + qBittorrent）**：仓库根 `docker-compose.yml` 已内置
+qBittorrent，下载→整理闭环开箱即用。步骤：
 
 ```bash
-docker compose up -d          # 本地构建并启动
+mkdir -p config
+cp config/config.example.yaml config/config.yaml   # 改 TMDB api_key（必填）等
+# 编辑 docker-compose.yml：把 /srv/media 改成你的宿主目录，并设好登录账号密码环境变量
+docker compose up -d
+# MediaMaid → http://<IP>:8500 ，qBittorrent → http://<IP>:8080（默认 admin/adminadmin）
 ```
 
+- 两个容器挂**同一个宿主目录**到 `/data`（下载与媒体库同盘 → 硬链接生效）。
+- 登录账号用环境变量 `MEDIAMAID_USERNAME/PASSWORD` 设置（compose 已示例，务必改默认密码）。
+- 配置项逐行注释见 `config/config.example.yaml`。
+
 **预构建镜像**：GitHub Actions（`.github/workflows/docker-publish.yml`）在打 `v*` tag
-时自动构建多架构（amd64/arm64）镜像并发布到 GHCR（也可手动触发）。直接拉取：
+时自动构建多架构（amd64/arm64）镜像并发布到 GHCR（也可手动触发）：
 
 ```bash
 docker pull ghcr.io/invokerw/mediamaid:latest
 ```
 
-把 `docker-compose.yml` 里的 `build: .` 换成 `image: ghcr.io/invokerw/mediamaid:latest` 即可用预构建镜像。
+compose 默认即用该镜像；想本地构建则把 `image:` 换成 `build: .`。
 
 ### Docker 与目录（重要）
 

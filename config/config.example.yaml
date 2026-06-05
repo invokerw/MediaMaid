@@ -1,0 +1,116 @@
+# ============================================================================
+# MediaMaid 配置示例（配合 docker-compose.yml 的 qBittorrent + MediaMaid 一体化部署）
+#
+# 用法：cp config/config.example.yaml config/config.yaml，然后改 ★必填★ 项。
+# 容器内本文件路径为 /config/config.yaml（compose 已挂载 ./config:/config）。
+# 路径均为「容器内」视角；compose 把宿主 /srv/media 挂到两个容器的 /data，
+# 所以 downloads 与 media 同盘 → 硬链接生效。
+# ============================================================================
+
+# 监控/扫描的源目录（qB 下载保存目录）。可多个。
+source_dirs:
+  - /data/downloads
+
+# 媒体库根目录（Jellyfin/Plex/Emby 指向这里）。
+library_dir: /data/media
+
+# 转移失败目录（可选）：整理/识别失败的文件移此隔离，不再反复重试，
+# 可在 Web「文件」页用「手动转移」修复。留空则失败文件留在原地。
+failed_dir: /data/failed
+
+# 落地方式：hardlink（默认，省空间、保留做种；要求与源同盘）/ copy / move / symlink
+action: hardlink
+
+# 目标已存在时：skip（默认）/ overwrite / rename
+on_conflict: skip
+
+# ── 守护进程相关 ──
+stable_seconds: 30        # 文件大小连续 N 秒不变才认为下载完成再处理
+rescan_interval: 600      # 兜底全量重扫间隔（秒），0 关闭
+subscribe_interval: 600   # 闭环(run)：订阅轮询间隔（秒）
+poll_completed: false     # 闭环(run)：是否轮询下载器「已完成」任务并主动整理
+poll_interval: 300        # 完成轮询间隔（秒）
+
+# 状态库（去重/记录/回滚）。放 /config 持久化。
+state_db: /config/mediamaid.db
+
+# 全量扫描并发度（瓶颈在 TMDB 网络，别太大以免触发限流）
+scan_workers: 4
+
+# ── 刮削后处理 ──
+write_nfo: false          # 生成 .nfo（Kodi/Emby 友好）
+download_artwork: false   # 下载封面/fanart
+
+# ── Web 登录账号 ──
+# 注意：若在 compose 用环境变量 MEDIAMAID_USERNAME/PASSWORD 设了账号，则以环境变量为准，
+# 本段被忽略、UI 内也不可改。两者都不设时默认 admin/admin。
+auth:
+  username: admin
+  password_hash: ""       # 留空=默认口令 admin；在 Web「配置」页改密码后这里会写入哈希
+
+filters:
+  video_extensions: [mkv, mp4, avi, ts, m2ts, mov, wmv, flv, iso]
+  min_size_mb: 50         # 小于此体积忽略（过滤 sample / 垃圾文件）
+
+# 命名模板（默认 Jellyfin 规范）。可用占位符：
+#   {title} {show} {year} {season} {episode} {episode_title} {ext}
+# 动漫归类为自动：刮削后 TMDB 题材含「动画」(genre 16) 的剧集走 anime 模板（Anime/ 目录）。
+naming:
+  movie: "Movies/{title} ({year})/{title} ({year}).{ext}"
+  movie_no_year: "Movies/{title}/{title}.{ext}"
+  episode: "TV/{show} ({year})/Season {season:02d}/{show} - S{season:02d}E{episode:02d}.{ext}"
+  episode_no_year: "TV/{show}/Season {season:02d}/{show} - S{season:02d}E{episode:02d}.{ext}"
+  anime: "Anime/{show} ({year})/Season {season:02d}/{show} - S{season:02d}E{episode:02d}.{ext}"
+  anime_no_year: "Anime/{show}/Season {season:02d}/{show} - S{season:02d}E{episode:02d}.{ext}"
+
+# ── 插件 ──
+plugins:
+  # 刮削器固定为 tmdb（内置、不可关闭）。★必填 api_key★：https://www.themoviedb.org/settings/api
+  scraper:
+    - name: tmdb
+      config:
+        api_key: ""          # ★必填，留空扫描会直接报错★
+        language: zh-CN
+        # min_confidence: 0.5
+
+  # 下载器：qBittorrent。host=qbittorrent（compose 服务名，容器间互通），
+  # save_path 指向被监控的源目录。改过 qB 密码后这里同步改。
+  downloader:
+    - name: qbittorrent
+      enabled: true
+      config:
+        host: qbittorrent
+        port: 8080
+        username: admin
+        password: adminadmin     # ← 改成你 qB 的实际密码
+        category: mediamaid
+        save_path: /data/downloads
+        # 仅当 qB 与本项目路径不一致(且用 poll_completed)时才需要：远端前缀:本地前缀
+        # path_mappings: ["/downloads:/data/downloads"]
+
+  # 通知器 log 内置常开（Web「日志」页可看）。可再加 webhook：
+  # notifier:
+  #   - name: webhook
+  #     config: {url: "https://example.com/hook"}
+
+  # 订阅器（RSS）。也可不在这里配，改用 Web「订阅」页管理。
+  # subscriber:
+  #   - name: rss
+  #     config: {url: "https://example.com/rss"}
+
+# 订阅条目（追番/追剧）。建议在 Web「订阅」页可视化管理，这里留空即可。
+subscriptions: []
+
+# TMDB 规则（可选）：把命名混乱的资源（番剧/字幕组）用正则直接钉到指定 tmdb_id，
+# 跳过模糊搜索；也可忽略某条目的某些季/集。建议在 Web「TMDB 规则」页管理。
+# tmdb_rules:
+#   - id: shoutian
+#     tmdb_id: 224839           # 在 themoviedb.org 该条目 URL 里取数字 ID
+#     title: 遮天
+#     media_type: episode       # movie / episode
+#     category: anime           # tv / anime
+#     patterns:
+#       - '\]\[(?P<title>[^\]]*遮天[^\]]*)\].*\[(?P<episode>\d+)\]'
+#     season: 1
+#     ignore_seasons: []
+#     ignore_episodes: []
