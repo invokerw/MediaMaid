@@ -59,6 +59,23 @@ def test_auth_required_and_login(client):
     assert noauth.get("/api/me").json()["username"] == "admin"
 
 
+def test_env_credentials_override(client, monkeypatch):
+    c, _ = client
+    monkeypatch.setenv("MEDIAMAID_USERNAME", "boss")
+    monkeypatch.setenv("MEDIAMAID_PASSWORD", "s3cret")
+    fresh = TestClient(c.app)
+    # 默认 admin/admin 失效，环境变量账号生效
+    assert fresh.post("/api/login", json={"username": "admin", "password": "admin"}).status_code == 401
+    r = fresh.post("/api/login", json={"username": "boss", "password": "s3cret"})
+    assert r.status_code == 200
+    tok = r.json()["token"]
+    fresh.headers.update({"Authorization": f"Bearer {tok}"})
+    me = fresh.get("/api/me").json()
+    assert me["username"] == "boss" and me["env_managed"] is True
+    # 环境变量接管时禁止改账号
+    assert fresh.put("/api/account", json={"current_password": "s3cret", "password": "x"}).status_code == 400
+
+
 def test_change_account(client):
     c, _ = client
     # 当前密码错 → 403

@@ -232,9 +232,16 @@ export default function Config() {
 function AccountCard() {
   const [form] = Form.useForm();
   const [saving, setSaving] = useState(false);
+  const [envManaged, setEnvManaged] = useState(false);
 
   useEffect(() => {
-    api.me().then((r) => form.setFieldsValue({ username: r.username })).catch(() => {});
+    api
+      .me()
+      .then((r) => {
+        form.setFieldsValue({ username: r.username });
+        setEnvManaged(!!r.env_managed);
+      })
+      .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -261,7 +268,15 @@ function AccountCard() {
 
   return (
     <Card size="small" title="账号与安全" style={{ marginTop: 16 }}>
-      <Form form={form} layout="vertical" onFinish={onFinish}>
+      {envManaged && (
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message="账号由环境变量（MEDIAMAID_USERNAME / MEDIAMAID_PASSWORD）管理，此处不可修改。"
+        />
+      )}
+      <Form form={form} layout="vertical" onFinish={onFinish} disabled={envManaged}>
         <Form.Item name="username" label="用户名" rules={[{ required: true }]}>
           <Input style={{ maxWidth: 280 }} />
         </Form.Item>
@@ -275,7 +290,7 @@ function AccountCard() {
         >
           <Input.Password style={{ maxWidth: 280 }} placeholder="默认 admin" />
         </Form.Item>
-        <Button type="primary" htmlType="submit" loading={saving}>
+        <Button type="primary" htmlType="submit" loading={saving} disabled={envManaged}>
           更新账号
         </Button>
       </Form>

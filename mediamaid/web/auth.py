@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import os
 import secrets
 import time
 
@@ -61,6 +62,35 @@ def check_token(token: str) -> bool:
 
 def revoke_token(token: str) -> None:
     _tokens.pop(token, None)
+
+
+def env_username() -> str | None:
+    v = os.getenv("MEDIAMAID_USERNAME")
+    return v if v else None
+
+
+def env_password() -> str | None:
+    v = os.getenv("MEDIAMAID_PASSWORD")
+    return v if v else None
+
+
+def env_managed() -> bool:
+    """是否由环境变量管理账号（设了任一即视为接管，禁止 UI 改账号）。"""
+    return env_username() is not None or env_password() is not None
+
+
+def effective_username(config_username: str) -> str:
+    return env_username() or config_username
+
+
+def verify_login(username: str, password: str, config_username: str, config_hash: str) -> bool:
+    """校验登录：环境变量优先于 config。"""
+    if username != effective_username(config_username):
+        return False
+    ep = env_password()
+    if ep is not None:
+        return hmac.compare_digest(password, ep)
+    return verify_password(password, config_hash)
 
 
 def bearer_token(authorization: str | None) -> str | None:

@@ -5,6 +5,9 @@ services:
     restart: unless-stopped
     environment:
       - TZ=Asia/Shanghai
+      # Web 登录账号（设了则优先于 config.yaml，UI 内不可改）。不设则默认 admin/admin。
+      - MEDIAMAID_USERNAME=admin
+      - MEDIAMAID_PASSWORD=changeme
     ports:
       - "8500:8500"          # Web 管理界面
     volumes:

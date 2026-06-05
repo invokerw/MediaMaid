@@ -286,7 +286,7 @@ export const api = {
   login: (username: string, password: string) =>
     post<{ token: string; username: string }>("/api/login", { username, password }),
   logout: () => post<{ ok: boolean }>("/api/logout"),
-  me: () => get<{ username: string }>("/api/me"),
+  me: () => get<{ username: string; env_managed?: boolean }>("/api/me"),
   updateAccount: (body: {
     current_password: string;
     username?: string;
